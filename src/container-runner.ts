@@ -238,6 +238,14 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
+  // Inject tool credentials (Trello, GitHub, etc.) from tools.env if present.
+  // Docker reads the file on the host and injects the vars — the file itself
+  // is never mounted into the container.
+  const toolsEnvFile = path.join(process.cwd(), 'tools.env');
+  if (fs.existsSync(toolsEnvFile)) {
+    args.push('--env-file', toolsEnvFile);
+  }
+
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 
