@@ -5,37 +5,152 @@ description: Set up a new Software-A-Team project with Discord channel, group co
 
 # New Project Setup
 
-This skill sets up a new Software-A-Team project interactively. It creates the group config, registers the channel, and restarts nanoclaw.
+This skill is split into two parts:
+- **Part 1 (manual):** Things you must set up in external services before running this skill
+- **Part 2 (automated):** What this skill does once you have everything ready
+
+---
+
+## Part 1 — Prerequisites (do these before running the skill)
+
+Ask the user: **"What type of project is this?"**
+
+Options: `web` | `ios` | `android` | `saas` | `library`
+
+Then show the relevant checklist and ask them to confirm everything is ready before continuing.
+
+---
+
+### Universal (all project types)
+
+- [ ] **GitHub** — Create the repo (public or private). Generate a fine-grained PAT:
+  - Settings → Developer settings → Fine-grained personal access tokens
+  - Scopes: Contents (read/write), Pull requests (read/write), Actions (read)
+  - Set expiry and note the rotation date
+
+- [ ] **AWS** — Create a dedicated IAM user for this project:
+  1. IAM → Users → Create user (e.g. `myapp-agent`)
+  2. Attach managed policy: `PowerUserAccess`
+  3. Add inline policy for CDK role management:
+     ```json
+     {
+       "Effect": "Allow",
+       "Action": ["iam:CreateRole", "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+                  "iam:DeleteRole", "iam:PassRole", "iam:GetRole", "iam:ListRolePolicies",
+                  "iam:ListAttachedRolePolicies"],
+       "Resource": "arn:aws:iam::*:role/{project}-*"
+     }
+     ```
+     Replace `{project}` with the project name prefix (e.g. `myapp-*`).
+  4. Security credentials → Create access key → Application running outside AWS → save key ID + secret
+
+- [ ] **Discord** — Create the channel in the server. Enable Developer Mode (User Settings → Advanced), right-click the channel → Copy Channel ID.
+
+---
+
+### Web app adds
+
+- [ ] **Cloudflare** — Add the domain to Cloudflare. Create an API token:
+  - My Profile → API Tokens → Create Token → Custom token
+  - Permissions: Zone / Zone / Read + Zone / DNS / Edit
+  - Scope: your specific zone
+  - Save the token
+
+- [ ] **Email sending** — Choose one: Sendgrid, Resend, or Postmark.
+  - Create account, verify sending domain, generate API key
+  - Note: AWS SES is an option if keeping everything in AWS — verify domain in SES console
+
+---
+
+### iOS adds (in addition to web app)
+
+- [ ] **Apple Developer** — Create App ID at developer.apple.com (Certificates → Identifiers)
+- [ ] **App Store Connect API key** — Users and Access → Integrations → App Store Connect API → Generate key. Download the `.p8` file (can only be downloaded once). Note the Issuer ID and Key ID.
+- [ ] **Firebase** — Create project at console.firebase.google.com. Add iOS app with the bundle ID. Download `GoogleService-Info.plist`.
+
+---
+
+### Android adds (in addition to web app)
+
+- [ ] **Google Play Console** — Create the app. Then:
+  - Setup → API access → Link to a Google Cloud project
+  - Create service account → Grant "Release Manager" role
+  - Download the JSON key file
+
+- [ ] **Firebase** — Create project (or reuse iOS one). Add Android app. Download `google-services.json`.
+
+- [ ] **Signing keystore** — Generate on the host machine:
+  ```bash
+  keytool -genkey -v -keystore myapp.jks -alias myapp -keyalg RSA -keysize 2048 -validity 10000
+  ```
+  Store the `.jks` file, alias, key password, and store password securely.
+
+---
+
+### SaaS adds (in addition to web app)
+
+- [ ] **Stripe** — Create account at stripe.com. Developers → API keys → copy secret key. Set up webhook endpoint and copy webhook secret.
+- [ ] **Sentry** — Create project at sentry.io. Settings → Projects → Client Keys → copy DSN. Settings → Auth Tokens → create token for the agent.
+
+---
+
+## Part 2 — Skill execution (automated)
+
+Once the user confirms prerequisites are done, proceed with the steps below.
+
+---
 
 ## Step 1 — Collect inputs
 
-Ask the user for the following (can ask all at once):
+Ask for all of the following (can ask in one message):
 
+**Universal:**
 1. **Project name** — display name (e.g. `MyApp`)
 2. **GitHub repo** — `org/repo` (e.g. `my-org/my-app`)
-3. **Discord channel ID** — numeric ID (right-click channel in Discord → Copy Channel ID)
+3. **Discord channel ID** — copied in prerequisites
 4. **Folder name** — snake_case group folder (e.g. `discord_myapp`)
-5. **Bot name** — what the assistant calls itself in this channel (e.g. `Pangge`)
-6. **Git identity** — name and email for commits from this channel's agents (e.g. `Pangge, pangge@kuai.family`)
-7. **GitHub PAT** — repo-level token for this project (Settings → Developer settings → Fine-grained tokens; scopes: Contents read/write, Pull requests read/write, Actions read)
-8. **AWS access key ID** — per-project IAM key (PowerUserAccess recommended)
-9. **AWS secret access key** — corresponding secret
-10. **AWS region** — default region for this project (e.g. `ap-southeast-2`)
+5. **Bot name** — what the assistant calls itself (e.g. `Pangge`)
+6. **Git identity** — name and email for agent commits (e.g. `Pangge, pangge@kuai.family`)
+7. **GitHub PAT** — from prerequisites
+8. **AWS access key ID** — from prerequisites
+9. **AWS secret access key** — from prerequisites
+10. **AWS region** — default region (e.g. `ap-southeast-2`)
 
-Do NOT ask for a Trello board ID — a new board is created automatically in Step 3.
+**Web / SaaS adds:**
+11. **Cloudflare API token** — from prerequisites
+12. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
+
+**iOS adds:**
+13. **App Store Connect Issuer ID**
+14. **App Store Connect Key ID**
+15. **App Store Connect p8 file path** — path on host machine to the `.p8` file
+
+**Android adds:**
+13. **Google Play service account JSON path** — path on host machine
+14. **Keystore path + alias + passwords**
+
+**SaaS adds:**
+13. **Stripe secret key**
+14. **Stripe webhook secret**
+15. **Sentry DSN**
+16. **Sentry auth token**
+
+Do NOT ask for a Trello board ID — it is created automatically in Step 3.
+
+---
 
 ## Step 2 — Create group folder and CLAUDE.md
 
 Create `groups/{folder}/CLAUDE.md` using the template below. Substitute all placeholders:
 
-- `{PROJECT}` → project name (e.g. `MyApp`)
-- `{REPO}` → GitHub repo (e.g. `my-org/my-app`)
-- `{FOLDER}` → folder name (e.g. `discord_myapp`)
-- `{FOLDER_UPPER}` → folder name uppercased (e.g. `DISCORD_MYAPP`)
-- `{BOT_NAME}` → bot name (e.g. `Pangge`)
+- `{PROJECT}` → project name
+- `{REPO}` → GitHub repo
+- `{FOLDER}` → folder name
+- `{FOLDER_UPPER}` → folder name uppercased
+- `{BOT_NAME}` → bot name
 - `{GIT_NAME}` → git commit name
 - `{GIT_EMAIL}` → git commit email
-- `{WORKSPACE}` → `/workspace/group/{PROJECT}` (using the project name as given)
+- `{WORKSPACE}` → `/workspace/group/{PROJECT}`
 
 ```markdown
 # {BOT_NAME} — {PROJECT} Assistant
@@ -69,10 +184,10 @@ Board lists: Backlog → Ready → In Progress → Review → Deploying → Smok
 
 ```bash
 cd {WORKSPACE}
-git add -A && git commit -m "message" && git push
-gh pr create --title "..." --body "..."
-gh pr diff <pr-number> --repo {REPO}
-gh pr merge <pr-number> --repo {REPO} --squash
+GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} git add -A && git commit -m "message" && git push
+GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr create --title "..." --body "..."
+GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr diff <pr-number> --repo {REPO}
+GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr merge <pr-number> --repo {REPO} --squash
 ```
 
 After a deploy to main, get the live site URL:
@@ -80,12 +195,20 @@ After a deploy to main, get the live site URL:
 bash {WORKSPACE}/scripts/get-deploy-url.sh
 ```
 
-Git identity: name={GIT_NAME}, email={GIT_EMAIL}. GITHUB_TOKEN injected automatically.
+Git identity: name={GIT_NAME}, email={GIT_EMAIL}.
 
 ## AWS
 
 Local dev routes to LocalStack via `AWS_ENDPOINT_URL=http://host.docker.internal:4566` (already set).
 Use `cdklocal` instead of `cdk`. Real credentials only exist in GitHub Actions secrets.
+
+Prefix all AWS/CDK commands with the scoped credentials:
+```bash
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_{FOLDER_UPPER} \
+AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER} \
+AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION_{FOLDER_UPPER} \
+cdklocal deploy
+```
 
 ---
 
@@ -171,9 +294,9 @@ LOOP:
        GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr list --repo {REPO} \
          --state all --json number,title,headRefName,state,mergedAt --limit 10
 
-     Use this to reconcile Trello state. If GitHub shows a PR was merged but the Trello card is not in Done:
-     - Move the card to Done
-     - Check if SMOKE_TEST_RESULT.md exists — if not, invoke Engineer (step 16: smoke test)
+     Use this to reconcile Trello state. If GitHub shows a PR was merged but the Trello card is not in Deploying/Smoke Test/Done:
+     - Move the card to Deploying
+     - The routing in step 5 will then invoke the Engineer to watch the deploy
 
   4. Check for e2e test coverage of cards in Review:
        ls {WORKSPACE}/tests/e2e/*.spec.js 2>/dev/null || echo "none"
@@ -206,9 +329,6 @@ LOOP:
    git -C {WORKSPACE} log main..origin/feature/<branch> --oneline 2>/dev/null
    ```
 
-   "Deploy confirmed" means: Engineer has reported back with a live URL from get-deploy-url.sh.
-   Until that report is received, a Done card is not fully complete.
-
   6. Invoke the agent, wait for it to complete
   7. Go to step 1
 ```
@@ -238,12 +358,14 @@ If the user's reply is itself a new feature request rather than answers to the q
 
 **Stop conditions (report to user and wait):**
 - CLARIFICATION.md exists → sent questions to user, waiting for answers
-- All cards are in Done AND deploy confirmed with live URL → pipeline complete
+- All cards are in Done → pipeline complete, send final summary with live URL
 - A card has been stuck In Progress with no feedback for 2+ loop iterations → likely an error
 - An agent returns an error → describe what failed and ask how to proceed
 - Senior Reviewer rejects more than 2 times for the same card → escalate to user
 - Engineer deploy watch fails more than 2 times for the same card → escalate to user
 ```
+
+---
 
 ## Step 3 — Create Trello board and update tools.env
 
@@ -255,24 +377,25 @@ Use the shared `TRELLO_API_KEY` and `TRELLO_TOKEN` from `tools.env` to create a 
 # Create board (returns JSON with .id)
 BOARD_ID=$(curl -s -X POST "https://api.trello.com/1/boards/" \
   -d "name={PROJECT}&defaultLists=false&key=$TRELLO_API_KEY&token=$TRELLO_TOKEN" \
-  | jq -r '.id')
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
-# Create lists in order (Trello adds them bottom-up, so create in reverse)
+# Create lists in order (Trello adds bottom-up, so create in reverse)
 for LIST in Done "Smoke Test" Deploying Review "In Progress" Ready Backlog; do
   curl -s -X POST "https://api.trello.com/1/lists" \
     -d "name=$LIST&idBoard=$BOARD_ID&key=$TRELLO_API_KEY&token=$TRELLO_TOKEN" > /dev/null
 done
 
-echo "Board ID: $BOARD_ID"
+echo "Board created: $BOARD_ID"
 ```
 
-Save the board ID — it is used in the next step. Do NOT print or log the API key or token values.
+Do NOT print or log the API key or token values.
 
 ### 3b — Write tools.env
 
 `tools.env` lives at `/home/ben/Projects/nanoclaw/groups/tools.env`. It is gitignored — never committed, even in the private groups repo.
 
-If it does **not exist yet**, create it with these entries:
+Append a block for the new project (create the file if it doesn't exist):
+
 ```
 # {PROJECT}
 TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id from 3a>
@@ -282,9 +405,35 @@ AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}=<aws-secret>
 AWS_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
 ```
 
-If it already exists, append the same block for the new project.
+Add extra lines for the project type's additional credentials (omit lines that don't apply):
+
+```
+# Web
+CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
+EMAIL_API_KEY_{FOLDER_UPPER}=<key>
+
+# iOS
+APP_STORE_CONNECT_ISSUER_ID_{FOLDER_UPPER}=<id>
+APP_STORE_CONNECT_KEY_ID_{FOLDER_UPPER}=<key-id>
+APP_STORE_CONNECT_P8_PATH_{FOLDER_UPPER}=<host-path-to-p8>
+
+# Android
+GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-json>
+ANDROID_KEYSTORE_PATH_{FOLDER_UPPER}=<host-path-to-jks>
+ANDROID_KEY_ALIAS_{FOLDER_UPPER}=<alias>
+ANDROID_KEY_PASSWORD_{FOLDER_UPPER}=<password>
+ANDROID_STORE_PASSWORD_{FOLDER_UPPER}=<password>
+
+# SaaS
+STRIPE_SECRET_KEY_{FOLDER_UPPER}=<key>
+STRIPE_WEBHOOK_SECRET_{FOLDER_UPPER}=<secret>
+SENTRY_DSN_{FOLDER_UPPER}=<dsn>
+SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>
+```
 
 **Security:** Never print, echo, or log any credential values. When confirming to the user, show only the variable names and mask secret values to `****<last4>`. These credentials are per-project — rotating one does not affect others.
+
+---
 
 ## Step 4 — Register the group in the DB
 
@@ -299,6 +448,8 @@ sqlite3 /home/ben/Projects/nanoclaw/store/messages.db \
   "SELECT * FROM registered_groups WHERE folder='<folder>';"
 ```
 
+---
+
 ## Step 5 — Commit to groups repo
 
 ```bash
@@ -306,6 +457,8 @@ git -C /home/ben/Projects/nanoclaw/groups add {folder}/CLAUDE.md
 git -C /home/ben/Projects/nanoclaw/groups commit -m "feat: add {project} group config"
 git -C /home/ben/Projects/nanoclaw/groups push
 ```
+
+---
 
 ## Step 6 — Restart nanoclaw
 
@@ -318,12 +471,14 @@ Wait 3 seconds, then confirm it came back up:
 systemctl --user status nanoclaw --no-pager | head -5
 ```
 
+---
+
 ## Step 7 — Summary
 
 Tell the user:
-- Trello board created with lists: Backlog → Ready → In Progress → Review → Done
+- Trello board created: Backlog → Ready → In Progress → Review → Deploying → Smoke Test → Done
 - Group folder created: `groups/{folder}/CLAUDE.md`
-- credentials written to `tools.env` (never show actual values)
+- Credentials written to `tools.env` (values never shown)
 - DB row inserted for channel `dc:<channelId>`
-- nanoclaw restarted
+- nanoclaw restarted and running
 - Next step: send a message in the Discord channel to verify the bot responds
