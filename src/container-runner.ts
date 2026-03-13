@@ -245,6 +245,9 @@ function buildContainerArgs(
     args.push('--env-file', toolsEnvFile);
   }
 
+  // Shared memory for Playwright/Chromium (default 64m causes crashes on complex pages)
+  args.push('--shm-size', '1g');
+
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 

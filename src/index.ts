@@ -327,6 +327,16 @@ async function runAgent(
     }
 
     if (output.status === 'error') {
+      // If the session timed out with no output, the session is stuck — clear it
+      // so the next message starts fresh instead of resuming the broken session.
+      if (output.error?.includes('timed out') && !output.newSessionId) {
+        logger.warn(
+          { group: group.name },
+          'Session timed out with no output — clearing session for auto-recovery',
+        );
+        delete sessions[group.folder];
+        setSession(group.folder, '');
+      }
       logger.error(
         { group: group.name, error: output.error },
         'Container agent error',
