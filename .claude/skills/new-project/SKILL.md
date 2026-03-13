@@ -230,12 +230,19 @@ If the user's reply is itself a new feature request rather than answers to the q
 
 ## Step 3 — Update tools.env
 
-Check if `tools.env` exists at `/home/ben/Projects/nanoclaw/tools.env`. If so, check whether it already has a `TRELLO_BOARD_ID` entry.
+`tools.env` lives at `/home/ben/Projects/nanoclaw/tools.env`. It is gitignored and never committed — it holds secrets for all projects.
 
-- If no `TRELLO_BOARD_ID` exists yet (first project), add: `TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>`
-- If one exists already (multi-project), add the new per-project var: `TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>`
+If it does **not exist yet**, create it now with the new project's Trello board ID as the first entry:
+```
+TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>
+```
 
-Show the user what line was added and remind them to add any other credentials needed (GitHub token if a different org, AWS creds, etc.).
+If it already exists, append the new per-project var:
+```
+TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>
+```
+
+Show the user what line was added and ask if any other credentials are needed before continuing (e.g. GitHub token for a different org, AWS keys). Wait for confirmation before proceeding to Step 4.
 
 ## Step 4 — Register the group in the DB
 
