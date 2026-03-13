@@ -106,7 +106,10 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   );
                 } else {
                   const targetGroup = registeredGroups[chatJid];
-                  if (isMain || (targetGroup && targetGroup.folder === sourceGroup)) {
+                  if (
+                    isMain ||
+                    (targetGroup && targetGroup.folder === sourceGroup)
+                  ) {
                     // Translate container path to host path
                     const containerPath: string = data.filePath;
                     let hostPath = containerPath;
