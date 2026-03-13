@@ -16,8 +16,12 @@ Ask the user for the following (can ask all at once):
 3. **Discord channel ID** — numeric ID (right-click channel in Discord → Copy Channel ID)
 4. **Folder name** — snake_case group folder (e.g. `discord_myapp`)
 5. **Bot name** — what the assistant calls itself in this channel (e.g. `Pangge`)
-6. **Trello board ID** — if different from any existing project, paste the board ID from the Trello URL (`https://trello.com/b/<BOARD_ID>/...`)
+6. **Trello board ID** — paste from Trello URL (`https://trello.com/b/<BOARD_ID>/...`)
 7. **Git identity** — name and email for commits from this channel's agents (e.g. `Pangge, pangge@kuai.family`)
+8. **GitHub PAT** — repo-level token for this project (Settings → Developer settings → Fine-grained tokens; scopes: Contents read/write, Pull requests read/write, Actions read)
+9. **AWS access key ID** — per-project IAM key (PowerUserAccess recommended)
+10. **AWS secret access key** — corresponding secret
+11. **AWS region** — default region for this project (e.g. `ap-southeast-2`)
 
 ## Step 2 — Create group folder and CLAUDE.md
 
@@ -102,7 +106,8 @@ This channel runs the **software-a-team** for the **{PROJECT}** project.
 Agent role files live at `/workspace/global/software-a-team/agents/`. When invoking a sub-agent, always start the prompt with:
 > "Read `/workspace/global/software-a-team/agents/<role>.md` and follow those instructions.
 > Read `{WORKSPACE}/ARCHITECTURE_DECISIONS.md` — all architectural choices must comply with it.
-> Project config: REPO=`{REPO}`, WORKSPACE=`{WORKSPACE}`"
+> Project config: REPO=`{REPO}`, WORKSPACE=`{WORKSPACE}`
+> Credentials: GH_TOKEN=`$GITHUB_TOKEN_{FOLDER_UPPER}`, AWS_ACCESS_KEY_ID=`$AWS_ACCESS_KEY_ID_{FOLDER_UPPER}`, AWS_SECRET_ACCESS_KEY=`$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}`, AWS_DEFAULT_REGION=`$AWS_DEFAULT_REGION_{FOLDER_UPPER}`, TRELLO_BOARD_ID=`$TRELLO_BOARD_ID_{FOLDER_UPPER}`. Prefix all `gh`/`git push` commands with `GH_TOKEN=<value>`, all AWS/CDK commands with the AWS vars, and all `trello.sh` calls with `TRELLO_BOARD_ID=<value>`."
 
 Then provide the card ID, task title, and any relevant context (PR URL, feedback file contents, etc.).
 
@@ -232,17 +237,19 @@ If the user's reply is itself a new feature request rather than answers to the q
 
 `tools.env` lives at `/home/ben/Projects/nanoclaw/tools.env`. It is gitignored and never committed — it holds secrets for all projects.
 
-If it does **not exist yet**, create it now with the new project's Trello board ID as the first entry:
+If it does **not exist yet**, create it with these entries:
 ```
+# {PROJECT}
 TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>
+GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
+AWS_ACCESS_KEY_ID_{FOLDER_UPPER}=<aws-key-id>
+AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}=<aws-secret>
+AWS_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
 ```
 
-If it already exists, append the new per-project var:
-```
-TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>
-```
+If it already exists, append the same block for the new project.
 
-Show the user what line was added and ask if any other credentials are needed before continuing (e.g. GitHub token for a different org, AWS keys). Wait for confirmation before proceeding to Step 4.
+Show the user the lines added (mask secrets to last 4 chars). These credentials are per-project — rotating one does not affect others.
 
 ## Step 4 — Register the group in the DB
 
