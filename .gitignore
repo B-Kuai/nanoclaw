@@ -15,7 +15,6 @@ groups/
 # Secrets
 *.keys.json
 .env
-tools.env
 
 # Temp files
 .tmp-*

@@ -63,7 +63,7 @@ TRELLO_BOARD_ID=$TRELLO_BOARD_ID_{FOLDER_UPPER} bash /workspace/project/tools/tr
 ```
 
 Card IDs: shown as `[abc123]` — use the 6-char suffix. List names are case-insensitive partial match.
-Board lists: Backlog → Ready → In Progress → Review → Done
+Board lists: Backlog → Ready → In Progress → Review → Deploying → Smoke Test → Done
 
 ## GitHub
 
@@ -179,22 +179,22 @@ LOOP:
        ls {WORKSPACE}/tests/e2e/*.spec.js 2>/dev/null || echo "none"
 
   5. Route to next agent:
-       CLARIFICATION.md exists                        → STOP: send questions to user, wait for answers (see Clarification Flow below)
-       Cards in "Done"        + no deploy confirmation                  → invoke Engineer (step 16: watch post-merge deploy)
-       Cards in "Done"        + deploy confirmed + no SMOKE_TEST_RESULT.md → invoke Engineer (step 16: browser smoke test on live URL)
-       Cards in "Done"        + SMOKE_TEST_RESULT.md = FAIL               → move card to In Progress, report failure to user
-       Cards in "Review"      + no e2e spec for this card → invoke QA (Phase B, write e2e tests)
-       Cards in "Review"      + e2e spec exists           → invoke Senior Reviewer
-       Cards in "Ready"       + QA_PLAN.md exists         → invoke Engineer
-       Cards in "Ready"       + no QA_PLAN.md             → invoke QA (Phase A, advisory plan)
-       PR_STATE.md STEP=watching-deploy                   → invoke Engineer (step 16: resume deploy watch)
-       PR_STATE.md STEP=waiting-ci                        → invoke Engineer (step 10: resume CI watch for PR in PR_STATE.md)
-       Cards in "In Progress" + REVIEW_FEEDBACK.md        → invoke Engineer (rework)
+       CLARIFICATION.md exists                              → STOP: send questions to user, wait for answers (see Clarification Flow below)
+       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = PASS → move card to Done, continue loop
+       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = FAIL → move card to In Progress, report failure to user
+       Cards in "Smoke Test"  + no SMOKE_TEST_RESULT.md    → invoke Engineer (step 16: run browser smoke test on live URL)
+       Cards in "Deploying"                                 → invoke Engineer (step 16: watch deploy in progress)
+       Cards in "Review"      + no e2e spec for this card  → invoke QA (Phase B, write e2e tests)
+       Cards in "Review"      + e2e spec exists            → invoke Senior Reviewer
+       Cards in "Ready"       + QA_PLAN.md exists          → invoke Engineer
+       Cards in "Ready"       + no QA_PLAN.md              → invoke QA (Phase A, advisory plan)
+       PR_STATE.md STEP=waiting-ci                         → invoke Engineer (step 10: resume CI watch for PR in PR_STATE.md)
+       Cards in "In Progress" + REVIEW_FEEDBACK.md         → invoke Engineer (rework)
        Cards in "In Progress" + no feedback + WIP commits on branch → invoke Engineer (resume interrupted work — pass PR_STATE.md contents if it exists)
-       Cards in "In Progress" + no feedback + no branch   → STOP: report status, something is stuck
-       Cards in "Backlog"                                 → invoke Tech Lead
-       No cards yet                                       → invoke PM (first time, or user added new requirements)
-       No active cards + all deploys confirmed + all smoke tests PASS → STOP: all done, send final summary with live URL
+       Cards in "In Progress" + no feedback + no branch    → STOP: report status, something is stuck
+       Cards in "Backlog"                                   → invoke Tech Lead
+       No cards yet                                         → invoke PM (first time, or user added new requirements)
+       No active cards + all cards in Done                  → STOP: all done, send final summary with live URL
 
    To check if an e2e spec exists for a card: look for a .spec.js file in tests/e2e/ whose
    name relates to the card's feature (not card ID). If uncertain, invoke QA Phase B anyway —
@@ -258,7 +258,7 @@ BOARD_ID=$(curl -s -X POST "https://api.trello.com/1/boards/" \
   | jq -r '.id')
 
 # Create lists in order (Trello adds them bottom-up, so create in reverse)
-for LIST in Done Review "In Progress" Ready Backlog; do
+for LIST in Done "Smoke Test" Deploying Review "In Progress" Ready Backlog; do
   curl -s -X POST "https://api.trello.com/1/lists" \
     -d "name=$LIST&idBoard=$BOARD_ID&key=$TRELLO_API_KEY&token=$TRELLO_TOKEN" > /dev/null
 done
@@ -270,7 +270,7 @@ Save the board ID — it is used in the next step. Do NOT print or log the API k
 
 ### 3b — Write tools.env
 
-`tools.env` lives at `/home/ben/Projects/nanoclaw/tools.env`. It is gitignored and never committed.
+`tools.env` lives at `/home/ben/Projects/nanoclaw/groups/tools.env`. It is gitignored — never committed, even in the private groups repo.
 
 If it does **not exist yet**, create it with these entries:
 ```
