@@ -245,6 +245,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         { group: group.name },
         'Agent error after output was sent, skipping cursor rollback to prevent duplicates',
       );
+      await channel.sendMessage(
+        chatJid,
+        '⏰ I ran out of time mid-task. Send me **resume** to pick up where I left off.',
+      );
       return true;
     }
     // Roll back cursor so retries can re-process these messages
