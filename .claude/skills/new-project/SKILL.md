@@ -165,6 +165,7 @@ LOOP:
        ls {WORKSPACE}/QA_PLAN.md 2>/dev/null && echo exists || echo missing
        cat {WORKSPACE}/REVIEW_FEEDBACK.md 2>/dev/null
        cat {WORKSPACE}/SMOKE_TEST_RESULT.md 2>/dev/null  # PASS/FAIL after live deploy
+       cat {WORKSPACE}/PR_STATE.md 2>/dev/null           # Engineer checkpoint: PR number + current step
 
   3. Check for e2e test coverage of cards in Review:
        ls {WORKSPACE}/tests/e2e/*.spec.js 2>/dev/null || echo "none"
@@ -178,8 +179,10 @@ LOOP:
        Cards in "Review"      + e2e spec exists           → invoke Senior Reviewer
        Cards in "Ready"       + QA_PLAN.md exists         → invoke Engineer
        Cards in "Ready"       + no QA_PLAN.md             → invoke QA (Phase A, advisory plan)
+       PR_STATE.md STEP=watching-deploy                   → invoke Engineer (step 16: resume deploy watch)
+       PR_STATE.md STEP=waiting-ci                        → invoke Engineer (step 10: resume CI watch for PR in PR_STATE.md)
        Cards in "In Progress" + REVIEW_FEEDBACK.md        → invoke Engineer (rework)
-       Cards in "In Progress" + no feedback + WIP commits on branch → invoke Engineer (resume interrupted work)
+       Cards in "In Progress" + no feedback + WIP commits on branch → invoke Engineer (resume interrupted work — pass PR_STATE.md contents if it exists)
        Cards in "In Progress" + no feedback + no branch   → STOP: report status, something is stuck
        Cards in "Backlog"                                 → invoke Tech Lead
        No cards yet                                       → invoke PM (first time, or user added new requirements)
