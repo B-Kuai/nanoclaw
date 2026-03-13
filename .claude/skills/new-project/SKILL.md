@@ -16,12 +16,13 @@ Ask the user for the following (can ask all at once):
 3. **Discord channel ID** — numeric ID (right-click channel in Discord → Copy Channel ID)
 4. **Folder name** — snake_case group folder (e.g. `discord_myapp`)
 5. **Bot name** — what the assistant calls itself in this channel (e.g. `Pangge`)
-6. **Trello board ID** — paste from Trello URL (`https://trello.com/b/<BOARD_ID>/...`)
-7. **Git identity** — name and email for commits from this channel's agents (e.g. `Pangge, pangge@kuai.family`)
-8. **GitHub PAT** — repo-level token for this project (Settings → Developer settings → Fine-grained tokens; scopes: Contents read/write, Pull requests read/write, Actions read)
-9. **AWS access key ID** — per-project IAM key (PowerUserAccess recommended)
-10. **AWS secret access key** — corresponding secret
-11. **AWS region** — default region for this project (e.g. `ap-southeast-2`)
+6. **Git identity** — name and email for commits from this channel's agents (e.g. `Pangge, pangge@kuai.family`)
+7. **GitHub PAT** — repo-level token for this project (Settings → Developer settings → Fine-grained tokens; scopes: Contents read/write, Pull requests read/write, Actions read)
+8. **AWS access key ID** — per-project IAM key (PowerUserAccess recommended)
+9. **AWS secret access key** — corresponding secret
+10. **AWS region** — default region for this project (e.g. `ap-southeast-2`)
+
+Do NOT ask for a Trello board ID — a new board is created automatically in Step 3.
 
 ## Step 2 — Create group folder and CLAUDE.md
 
@@ -233,14 +234,37 @@ If the user's reply is itself a new feature request rather than answers to the q
 - Engineer deploy watch fails more than 2 times for the same card → escalate to user
 ```
 
-## Step 3 — Update tools.env
+## Step 3 — Create Trello board and update tools.env
 
-`tools.env` lives at `/home/ben/Projects/nanoclaw/tools.env`. It is gitignored and never committed — it holds secrets for all projects.
+### 3a — Create Trello board
+
+Use the shared `TRELLO_API_KEY` and `TRELLO_TOKEN` from `tools.env` to create a new board and the standard lists:
+
+```bash
+# Create board (returns JSON with .id)
+BOARD_ID=$(curl -s -X POST "https://api.trello.com/1/boards/" \
+  -d "name={PROJECT}&defaultLists=false&key=$TRELLO_API_KEY&token=$TRELLO_TOKEN" \
+  | jq -r '.id')
+
+# Create lists in order (Trello adds them bottom-up, so create in reverse)
+for LIST in Done Review "In Progress" Ready Backlog; do
+  curl -s -X POST "https://api.trello.com/1/lists" \
+    -d "name=$LIST&idBoard=$BOARD_ID&key=$TRELLO_API_KEY&token=$TRELLO_TOKEN" > /dev/null
+done
+
+echo "Board ID: $BOARD_ID"
+```
+
+Save the board ID — it is used in the next step. Do NOT print or log the API key or token values.
+
+### 3b — Write tools.env
+
+`tools.env` lives at `/home/ben/Projects/nanoclaw/tools.env`. It is gitignored and never committed.
 
 If it does **not exist yet**, create it with these entries:
 ```
 # {PROJECT}
-TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id>
+TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id from 3a>
 GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
 AWS_ACCESS_KEY_ID_{FOLDER_UPPER}=<aws-key-id>
 AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}=<aws-secret>
@@ -249,7 +273,7 @@ AWS_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
 
 If it already exists, append the same block for the new project.
 
-Show the user the lines added (mask secrets to last 4 chars). These credentials are per-project — rotating one does not affect others.
+**Security:** Never print, echo, or log any credential values. When confirming to the user, show only the variable names and mask secret values to `****<last4>`. These credentials are per-project — rotating one does not affect others.
 
 ## Step 4 — Register the group in the DB
 
@@ -286,8 +310,9 @@ systemctl --user status nanoclaw --no-pager | head -5
 ## Step 7 — Summary
 
 Tell the user:
+- Trello board created with lists: Backlog → Ready → In Progress → Review → Done
 - Group folder created: `groups/{folder}/CLAUDE.md`
+- credentials written to `tools.env` (never show actual values)
 - DB row inserted for channel `dc:<channelId>`
 - nanoclaw restarted
 - Next step: send a message in the Discord channel to verify the bot responds
-- Reminder: the Trello board env var `TRELLO_BOARD_ID_{FOLDER_UPPER}` must be set in `tools.env` before the first agent run
