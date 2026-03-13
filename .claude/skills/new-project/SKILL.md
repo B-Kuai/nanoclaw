@@ -161,16 +161,24 @@ Use `mcp__nanoclaw__send_message` to post progress updates to the user while wor
 LOOP:
   1. Check Trello state (run: TRELLO_BOARD_ID=$TRELLO_BOARD_ID_{FOLDER_UPPER} bash /workspace/project/tools/trello.sh cards)
   2. Check state files:
-       cat {WORKSPACE}/CLARIFICATION.md 2>/dev/null      # check if an agent is waiting for answers
+       cat {WORKSPACE}/CLARIFICATION.md 2>/dev/null
        ls {WORKSPACE}/QA_PLAN.md 2>/dev/null && echo exists || echo missing
        cat {WORKSPACE}/REVIEW_FEEDBACK.md 2>/dev/null
-       cat {WORKSPACE}/SMOKE_TEST_RESULT.md 2>/dev/null  # PASS/FAIL after live deploy
-       cat {WORKSPACE}/PR_STATE.md 2>/dev/null           # Engineer checkpoint: PR number + current step
+       cat {WORKSPACE}/SMOKE_TEST_RESULT.md 2>/dev/null
+       cat {WORKSPACE}/PR_STATE.md 2>/dev/null
 
-  3. Check for e2e test coverage of cards in Review:
+  3. Check GitHub for open and recently merged PRs — source of truth for PR state, independent of Trello:
+       GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr list --repo {REPO} \
+         --state all --json number,title,headRefName,state,mergedAt --limit 10
+
+     Use this to reconcile Trello state. If GitHub shows a PR was merged but the Trello card is not in Done:
+     - Move the card to Done
+     - Check if SMOKE_TEST_RESULT.md exists — if not, invoke Engineer (step 16: smoke test)
+
+  4. Check for e2e test coverage of cards in Review:
        ls {WORKSPACE}/tests/e2e/*.spec.js 2>/dev/null || echo "none"
 
-  4. Route to next agent:
+  5. Route to next agent:
        CLARIFICATION.md exists                        → STOP: send questions to user, wait for answers (see Clarification Flow below)
        Cards in "Done"        + no deploy confirmation                  → invoke Engineer (step 16: watch post-merge deploy)
        Cards in "Done"        + deploy confirmed + no SMOKE_TEST_RESULT.md → invoke Engineer (step 16: browser smoke test on live URL)
@@ -201,8 +209,8 @@ LOOP:
    "Deploy confirmed" means: Engineer has reported back with a live URL from get-deploy-url.sh.
    Until that report is received, a Done card is not fully complete.
 
-  5. Invoke the agent, wait for it to complete
-  6. Go to step 1
+  6. Invoke the agent, wait for it to complete
+  7. Go to step 1
 ```
 
 ## Clarification Flow
