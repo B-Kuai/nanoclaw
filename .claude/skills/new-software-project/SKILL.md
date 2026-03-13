@@ -1,5 +1,5 @@
 ---
-name: new-project
+name: new-software-project
 description: Set up a new Software-A-Team project with Discord channel, group config, DB registration, and nanoclaw restart.
 ---
 
