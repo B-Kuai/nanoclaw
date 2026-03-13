@@ -280,7 +280,7 @@ Use `mcp__nanoclaw__send_message` to post progress updates to the user while wor
 - **When an agent asks clarifying questions:** send all questions to the user verbatim, numbered
 - **When all done:** final summary with live URL
 - **When blocked:** explain what's wrong and what you need
-- **Every 30 minutes of continuous work:** "⏳ Still working — [one-line summary of current step]"
+- **Every 10 minutes of continuous work:** "⏳ Still working — [one-line summary of current step]"
 
 ```
 LOOP:
@@ -361,10 +361,10 @@ If the user's reply is itself a new feature request rather than answers to the q
 **Stop conditions (report to user and wait):**
 - CLARIFICATION.md exists → sent questions to user, waiting for answers
 - All cards are in Done → pipeline complete, send final summary with live URL
-- A card has been stuck In Progress with no feedback for 2+ loop iterations → likely an error
-- An agent returns an error → describe what failed and ask how to proceed
-- Senior Reviewer rejects more than 2 times for the same card → escalate to user
-- Engineer deploy watch fails more than 2 times for the same card → escalate to user
+- A card has been stuck In Progress with no WIP branch for 5+ loop iterations → something is fundamentally stuck, report and wait
+- An agent returns an error → retry once with a fresh invocation before escalating; only stop if it fails twice in a row
+- Senior Reviewer rejects more than 3 times for the same card → escalate to user
+- Engineer deploy watch fails more than 3 times for the same card → escalate to user
 ```
 
 ---
