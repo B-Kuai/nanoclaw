@@ -1,4 +1,5 @@
 import {
+  AttachmentBuilder,
   Client,
   Events,
   GatewayIntentBits,
@@ -219,6 +220,34 @@ export class DiscordChannel implements Channel {
       logger.info({ jid, length: text.length }, 'Discord message sent');
     } catch (err) {
       logger.error({ jid, err }, 'Failed to send Discord message');
+    }
+  }
+
+  async sendFile(
+    jid: string,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    if (!this.client) {
+      logger.warn('Discord client not initialized');
+      return;
+    }
+    try {
+      const channelId = jid.replace(/^dc:/, '');
+      const channel = await this.client.channels.fetch(channelId);
+      if (!channel || !('send' in channel)) {
+        logger.warn({ jid }, 'Discord channel not found or not text-based');
+        return;
+      }
+      const textChannel = channel as TextChannel;
+      const attachment = new AttachmentBuilder(filePath);
+      await textChannel.send({
+        files: [attachment],
+        ...(caption ? { content: caption } : {}),
+      });
+      logger.info({ jid, filePath }, 'Discord file sent');
+    } catch (err) {
+      logger.error({ jid, filePath, err }, 'Failed to send Discord file');
     }
   }
 
