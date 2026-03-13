@@ -54,7 +54,7 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
   - My Profile → API Tokens → Create Token → Custom token
   - Permissions: Zone / Zone / Read + Zone / DNS / Edit + (if using Pages/Workers) Account / Cloudflare Pages / Edit
   - Scope: your specific zone
-  - Save the token and note your **Account ID** (right sidebar of the Cloudflare dashboard)
+  - Save the token, **Account ID** (right sidebar of the Cloudflare dashboard), and **Zone ID** (right sidebar when viewing the domain — needed for DNS automation and cache purging)
 
 - [ ] **Email sending** — Choose one: Sendgrid, Resend, or Postmark.
   - Create account, verify sending domain, generate API key
@@ -119,6 +119,7 @@ Ask for all of the following (can ask in one message):
 **Web / SaaS adds:**
 11. **Cloudflare API token** — from prerequisites
 12. **Cloudflare account ID** — from prerequisites (dashboard right sidebar)
+13. **Cloudflare zone ID** — from prerequisites (domain right sidebar)
 13. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
 
 **iOS adds:**
@@ -412,6 +413,7 @@ Add extra lines for the project type's additional credentials (omit lines that d
 # Web
 CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
 CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
+CLOUDFLARE_ZONE_ID_{FOLDER_UPPER}=<zone-id>
 EMAIL_API_KEY_{FOLDER_UPPER}=<key>
 
 # iOS
@@ -452,6 +454,7 @@ GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION    --repo {REPO} --body "
 ```bash
 GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN  --repo {REPO} --body "<value>"
 GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID    --repo {REPO} --body "<value>"
 GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY         --repo {REPO} --body "<value>"
 ```
 
