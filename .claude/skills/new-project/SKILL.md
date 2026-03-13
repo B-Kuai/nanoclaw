@@ -52,9 +52,9 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
 
 - [ ] **Cloudflare** — Add the domain to Cloudflare. Create an API token:
   - My Profile → API Tokens → Create Token → Custom token
-  - Permissions: Zone / Zone / Read + Zone / DNS / Edit
+  - Permissions: Zone / Zone / Read + Zone / DNS / Edit + (if using Pages/Workers) Account / Cloudflare Pages / Edit
   - Scope: your specific zone
-  - Save the token
+  - Save the token and note your **Account ID** (right sidebar of the Cloudflare dashboard)
 
 - [ ] **Email sending** — Choose one: Sendgrid, Resend, or Postmark.
   - Create account, verify sending domain, generate API key
@@ -118,7 +118,8 @@ Ask for all of the following (can ask in one message):
 
 **Web / SaaS adds:**
 11. **Cloudflare API token** — from prerequisites
-12. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
+12. **Cloudflare account ID** — from prerequisites (dashboard right sidebar)
+13. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
 
 **iOS adds:**
 13. **App Store Connect Issuer ID**
@@ -410,6 +411,7 @@ Add extra lines for the project type's additional credentials (omit lines that d
 ```
 # Web
 CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
+CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
 EMAIL_API_KEY_{FOLDER_UPPER}=<key>
 
 # iOS
@@ -435,7 +437,61 @@ SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>
 
 ---
 
-## Step 4 — Register the group in the DB
+## Step 4 — Push credentials to GitHub repo secrets
+
+Use `gh secret set --repo {REPO}` for every credential. The `--repo` flag is required to target the specific repo rather than any default context.
+
+**Universal (all project types):**
+```bash
+GH_TOKEN=<github-pat> gh secret set AWS_ACCESS_KEY_ID     --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set AWS_SECRET_ACCESS_KEY --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION    --repo {REPO} --body "<value>"
+```
+
+**Web / SaaS adds:**
+```bash
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN  --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY         --repo {REPO} --body "<value>"
+```
+
+**iOS adds:**
+```bash
+GH_TOKEN=<github-pat> gh secret set APP_STORE_CONNECT_ISSUER_ID  --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set APP_STORE_CONNECT_KEY_ID     --repo {REPO} --body "<value>"
+# p8 file — base64-encode it first, decode in the workflow
+GH_TOKEN=<github-pat> gh secret set APP_STORE_CONNECT_P8_BASE64  --repo {REPO} --body "$(base64 -w0 <path-to-p8>)"
+```
+
+**Android adds:**
+```bash
+GH_TOKEN=<github-pat> gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo {REPO} --body "$(cat <path-to-json>)"
+GH_TOKEN=<github-pat> gh secret set ANDROID_KEYSTORE_BASE64          --repo {REPO} --body "$(base64 -w0 <path-to-jks>)"
+GH_TOKEN=<github-pat> gh secret set ANDROID_KEY_ALIAS                --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set ANDROID_KEY_PASSWORD             --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set ANDROID_STORE_PASSWORD           --repo {REPO} --body "<value>"
+```
+
+**SaaS adds:**
+```bash
+GH_TOKEN=<github-pat> gh secret set STRIPE_SECRET_KEY       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set STRIPE_WEBHOOK_SECRET   --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set SENTRY_AUTH_TOKEN       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set SENTRY_DSN              --repo {REPO} --body "<value>"
+```
+
+**Security:** Never print credential values. Confirm to the user by listing the secret names that were set (not the values), e.g.:
+```
+✅ GitHub secrets set on {REPO}:
+  AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION,
+  CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, EMAIL_API_KEY
+```
+
+Note: The GitHub PAT itself is not pushed as a secret — it's already in `tools.env` for agent use and the workflow can use the built-in `GITHUB_TOKEN` for same-repo operations.
+
+---
+
+## Step 5 — Register the group in the DB
 
 ```bash
 sqlite3 /home/ben/Projects/nanoclaw/store/messages.db \
@@ -450,7 +506,7 @@ sqlite3 /home/ben/Projects/nanoclaw/store/messages.db \
 
 ---
 
-## Step 5 — Commit to groups repo
+## Step 6 — Commit to groups repo
 
 ```bash
 git -C /home/ben/Projects/nanoclaw/groups add {folder}/CLAUDE.md
@@ -460,7 +516,7 @@ git -C /home/ben/Projects/nanoclaw/groups push
 
 ---
 
-## Step 6 — Restart nanoclaw
+## Step 7 — Restart nanoclaw
 
 ```bash
 systemctl --user restart nanoclaw
@@ -473,12 +529,13 @@ systemctl --user status nanoclaw --no-pager | head -5
 
 ---
 
-## Step 7 — Summary
+## Step 8 — Summary
 
 Tell the user:
 - Trello board created: Backlog → Ready → In Progress → Review → Deploying → Smoke Test → Done
 - Group folder created: `groups/{folder}/CLAUDE.md`
 - Credentials written to `tools.env` (values never shown)
+- GitHub repo secrets set on `{REPO}` (names listed, values never shown)
 - DB row inserted for channel `dc:<channelId>`
 - nanoclaw restarted and running
 - Next step: send a message in the Discord channel to verify the bot responds
