@@ -50,6 +50,13 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
 
 ### Web app adds
 
+- [ ] **Google Cloud** — Create a dedicated GCP project for this app (one project per app keeps billing, quotas, and credentials isolated):
+  - console.cloud.google.com → New Project → name it after the app (e.g. `myapp-prod`)
+  - Note the **Project ID** (used in API calls)
+  - Enable the APIs you need (reCAPTCHA Enterprise, Maps, Gmail API, etc.) under APIs & Services → Library
+  - For **reCAPTCHA v3**: go to google.com/recaptcha/admin → create site → reCAPTCHA v3 → add your domain → copy **Site key** (public) and **Secret key** (private)
+  - Store the secret key in AWS Secrets Manager (`us-east-1`) and note the ARN
+
 - [ ] **Cloudflare** — Add the domain to Cloudflare. Create an API token:
   - My Profile → API Tokens → Create Token → Custom token
   - Permissions: Zone / Zone / Read + Zone / DNS / Edit + (if using Pages/Workers) Account / Cloudflare Pages / Edit
@@ -120,7 +127,10 @@ Ask for all of the following (can ask in one message):
 11. **Cloudflare API token** — from prerequisites
 12. **Cloudflare account ID** — from prerequisites (dashboard right sidebar)
 13. **Cloudflare zone ID** — from prerequisites (domain right sidebar)
-13. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
+14. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
+15. **Google Cloud project ID** — from prerequisites
+16. **reCAPTCHA site key** — public key from Google reCAPTCHA admin (if using reCAPTCHA)
+17. **reCAPTCHA secret ARN** — AWS Secrets Manager ARN of the reCAPTCHA secret key (if using reCAPTCHA)
 
 **iOS adds:**
 13. **App Store Connect Issuer ID**
@@ -420,6 +430,14 @@ This file is the source of truth for all technical constraints. All agents must 
 - **Provider:** AWS Cognito (User Pool). No Firebase Auth, Auth0, or custom auth.
 - **JWT:** Validated at API Gateway level (JWT authorizer). Lambda reads pre-validated claims — never validates JWT itself.
 
+## Google Services
+
+- **One dedicated GCP project per app** — credentials and quotas are isolated per project.
+- **reCAPTCHA v3** (invisible, score-based) for bot protection on login/signup. Score threshold: 0.5.
+- **reCAPTCHA secret key** stored in AWS Secrets Manager (`us-east-1`), fetched at Lambda cold start. Never in source or environment variables.
+- **reCAPTCHA site key** and API base URL injected at deploy time via GitHub Actions secrets — never committed.
+- Additional Google APIs (Maps, etc.) use the same GCP project — enable per-API under APIs & Services.
+
 ## API Design
 
 - **Style:** REST over HTTPS. GraphQL only if explicitly requested.
@@ -669,6 +687,9 @@ CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
 CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
 CLOUDFLARE_ZONE_ID_{FOLDER_UPPER}=<zone-id>
 EMAIL_API_KEY_{FOLDER_UPPER}=<key>
+GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}=<gcp-project-id>
+RECAPTCHA_SITE_KEY_{FOLDER_UPPER}=<site-key>          # omit if not using reCAPTCHA
+RECAPTCHA_SECRET_ARN_{FOLDER_UPPER}=<secrets-manager-arn>  # omit if not using reCAPTCHA
 
 # iOS
 APP_STORE_CONNECT_ISSUER_ID_{FOLDER_UPPER}=<id>
@@ -706,10 +727,14 @@ GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION    --repo {REPO} --body "
 
 **Web / SaaS adds:**
 ```bash
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN  --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID    --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY         --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID      --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID         --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY              --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID    --repo {REPO} --body "<value>"
+# Only if using reCAPTCHA:
+GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SITE_KEY         --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SECRET_ARN       --repo {REPO} --body "<value>"
 ```
 
 **iOS adds:**
