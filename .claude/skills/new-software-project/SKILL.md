@@ -372,6 +372,252 @@ If the user's reply is itself a new feature request rather than answers to the q
 
 ---
 
+## Step 2b — Create ARCHITECTURE_DECISIONS.md
+
+Create `groups/{folder}/{PROJECT}/ARCHITECTURE_DECISIONS.md` using the template for the chosen project type. Substitute `{PROJECT}` throughout.
+
+> **Note:** The bottom section (PR Track decisions) always starts empty — agents append to it as they implement features.
+
+---
+
+### Template: web or saas
+
+```markdown
+# Architecture Decisions
+
+This file is the source of truth for all technical constraints. All agents must read it before making architectural choices.
+
+## Environments & URLs
+
+- **Production URL:** (set after first deploy)
+- **Staging URL:** (set after first deploy)
+
+## Cloud & Infrastructure
+
+- **Cloud provider:** AWS only. No GCP, Azure, or multi-cloud.
+- **IaC:** AWS CDK (TypeScript). No CloudFormation YAML, Terraform, or SAM.
+- **Region:** `ap-southeast-2` (Sydney) for all resources.
+- **CI/CD:** GitHub Actions only.
+
+## Runtime & Language
+
+- **Language:** TypeScript (Node.js 22). No Python, Go, or other runtimes unless explicitly approved.
+- **Runtime target:** AWS Lambda (preferred) or ECS Fargate for long-running processes.
+- **Package manager:** npm. No yarn or pnpm.
+
+## Frontend
+
+- **Hosting:** S3 + CloudFront. No Vercel, Netlify, or other third-party hosting.
+- **Framework:** Vanilla HTML/JS/CSS unless a framework is explicitly justified. No React/Vue/Angular unless approved.
+
+## Auth
+
+- **Provider:** AWS Cognito (User Pool). No Firebase Auth, Auth0, or custom auth.
+- **JWT:** Validated at API Gateway level (JWT authorizer). Lambda reads pre-validated claims — never validates JWT itself.
+
+## API Design
+
+- **Style:** REST over HTTPS. GraphQL only if explicitly requested.
+- **API Gateway:** AWS API Gateway v2 (HTTP API). Not REST API (v1) unless required.
+
+## Data
+
+- **Primary database:** DynamoDB (single-table design preferred).
+- **File storage:** S3.
+- **Caching:** ElastiCache (Redis) only if latency requirements demand it.
+- **No relational databases** unless explicitly approved.
+
+## Security
+
+- **Secrets:** AWS Secrets Manager only. No hardcoded credentials, no SSM Parameter Store for secrets.
+- **IAM:** Least-privilege. No `*` actions in production policies.
+- **Encryption:** All S3 buckets encrypted at rest. All data in transit via HTTPS.
+
+## Code Quality
+
+- **Tests:** All code must have unit tests. Minimum 80% coverage.
+- **Linting:** ESLint with TypeScript rules.
+- **No `any` types** in TypeScript without an explicit comment explaining why.
+
+## Cost Guardrails
+
+- **Prefer serverless** (Lambda, DynamoDB on-demand) over provisioned resources.
+- **No NAT Gateways** without approval — use VPC endpoints instead.
+- **Lambda:** max 512MB memory, max 30s timeout unless explicitly justified in `DESIGN.md`.
+- **DynamoDB:** on-demand billing only. No provisioned capacity.
+- **No multi-AZ RDS.** Use DynamoDB.
+- **S3:** no Glacier or intelligent tiering unless storing >1GB of infrequently accessed data.
+- **All CDK resources must include a cost allocation tag:**
+  ```typescript
+  Tags.of(app).add('Project', '{PROJECT}');
+  Tags.of(app).add('Environment', 'production'); // or 'staging'
+  ```
+- **CDK diff runs on every PR** and posts a comment showing all resource changes. The Senior Reviewer must review it before merging — reject if new resources are created without justification in `DESIGN.md`.
+```
+
+---
+
+### Template: ios
+
+```markdown
+# Architecture Decisions
+
+This file is the source of truth for all technical constraints. All agents must read it before making architectural choices.
+
+## Environments & URLs
+
+- **App Store:** (set after first submission)
+- **TestFlight:** (set after first build)
+- **API base URL:** (set after backend deploy)
+
+## Platform & Language
+
+- **Language:** Swift (latest stable). No Objective-C unless integrating a legacy SDK.
+- **Minimum iOS version:** iOS 16.
+- **Package manager:** Swift Package Manager. No CocoaPods or Carthage unless a dependency requires it.
+- **Xcode version:** latest stable.
+
+## Architecture
+
+- **Pattern:** MVVM. No MVC or VIPER unless explicitly approved.
+- **Async:** Swift Concurrency (async/await). No Combine or callbacks unless integrating a third-party SDK.
+
+## Auth
+
+- **Provider:** AWS Cognito via Amplify iOS SDK or direct HTTPS calls to Cognito endpoints.
+- **Token storage:** Keychain only. Never UserDefaults.
+
+## Backend
+
+- **Cloud provider:** AWS only.
+- **IaC:** AWS CDK (TypeScript). CI/CD via GitHub Actions.
+- **Region:** `ap-southeast-2` for all backend resources.
+
+## Distribution
+
+- **App Store distribution:** via App Store Connect API (fastlane or direct API calls).
+- **Signing:** Xcode automatic signing for development. Manual signing for release using `.p8` key from App Store Connect.
+- **CI builds:** GitHub Actions with Xcode Cloud or self-hosted macOS runner.
+
+## Code Quality
+
+- **Tests:** XCTest for unit tests. XCUITest for UI tests.
+- **Linting:** SwiftLint.
+- **No force unwrap** (`!`) without an explicit comment explaining why it is safe.
+
+## Security
+
+- **No hardcoded secrets** in source. Use environment variables injected at build time or fetched from backend.
+- **Certificate pinning** for all API calls in production.
+```
+
+---
+
+### Template: android
+
+```markdown
+# Architecture Decisions
+
+This file is the source of truth for all technical constraints. All agents must read it before making architectural choices.
+
+## Environments & URLs
+
+- **Play Store:** (set after first submission)
+- **Internal testing track:** (set after first build)
+- **API base URL:** (set after backend deploy)
+
+## Platform & Language
+
+- **Language:** Kotlin. No Java unless integrating a legacy SDK.
+- **Minimum SDK:** API 26 (Android 8.0).
+- **Build system:** Gradle (Kotlin DSL). No Maven.
+- **Package manager:** Gradle dependencies only. No manual JAR imports.
+
+## Architecture
+
+- **Pattern:** MVVM with ViewModel + LiveData/StateFlow. No MVC.
+- **Async:** Kotlin Coroutines. No RxJava unless integrating a third-party SDK.
+- **DI:** Hilt. No Dagger directly or Koin unless approved.
+
+## Auth
+
+- **Provider:** AWS Cognito via Amplify Android SDK or direct HTTPS calls.
+- **Token storage:** EncryptedSharedPreferences. Never plain SharedPreferences for tokens.
+
+## Backend
+
+- **Cloud provider:** AWS only.
+- **IaC:** AWS CDK (TypeScript). CI/CD via GitHub Actions.
+- **Region:** `ap-southeast-2` for all backend resources.
+
+## Distribution
+
+- **Play Store distribution:** via Google Play Developer API (service account JSON key).
+- **Signing:** debug keystore for development. Release keystore stored securely — never committed to source.
+- **CI builds:** GitHub Actions.
+
+## Code Quality
+
+- **Tests:** JUnit 4/5 for unit tests. Espresso for UI tests.
+- **Linting:** ktlint + Android Lint.
+- **No `!!` (non-null assertion)** without an explicit comment explaining why it is safe.
+
+## Security
+
+- **No hardcoded secrets.** Use BuildConfig fields injected from CI environment variables.
+- **Certificate pinning** for all API calls in production.
+- **ProGuard/R8** enabled for release builds.
+```
+
+---
+
+### Template: library
+
+```markdown
+# Architecture Decisions
+
+This file is the source of truth for all technical constraints. All agents must read it before making architectural choices.
+
+## Package
+
+- **Registry:** npm (public or scoped private).
+- **Package manager:** npm. No yarn or pnpm.
+- **Language:** TypeScript. Compiled to both ESM and CJS. Type declarations included.
+- **Node.js:** support LTS versions (current and previous LTS).
+
+## Versioning
+
+- **Scheme:** Semantic Versioning (semver). Breaking changes require a major bump.
+- **Changelog:** `CHANGELOG.md` updated on every release following Keep a Changelog format.
+- **Release:** via GitHub Actions on tag push (`v*`). No manual npm publish.
+
+## API Design
+
+- **Surface area:** keep public API minimal. Mark internal helpers with `@internal` JSDoc tag.
+- **No side effects** at import time.
+- **Tree-shakeable:** named exports preferred over default exports.
+
+## Dependencies
+
+- **Zero runtime dependencies** unless absolutely necessary — justify each one in `DESIGN.md`.
+- **Peer dependencies:** declare framework dependencies (React, etc.) as `peerDependencies`, not `dependencies`.
+- **Dev dependencies only** for testing, building, and linting.
+
+## Code Quality
+
+- **Tests:** Vitest or Jest. Minimum 90% coverage for public API surface.
+- **Linting:** ESLint with TypeScript rules.
+- **No `any` types** without an explicit comment explaining why.
+- **Formatting:** Prettier.
+
+## Security
+
+- **No hardcoded secrets** or environment-specific config.
+- **Dependency audit** runs on every PR (`npm audit`).
+```
+
+---
+
 ## Step 3 — Create Trello board and update tools.env
 
 ### 3a — Create Trello board
