@@ -44,27 +44,38 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
      Replace `{project}` with the project name prefix (e.g. `myapp-*`).
   4. Security credentials → Create access key → Application running outside AWS → save key ID + secret
 
+- [ ] **Google Cloud** — Create one dedicated GCP project per app (isolates billing, quotas, and credentials):
+  1. console.cloud.google.com → New Project → name it after the app (e.g. `myapp-prod`) → note the **Project ID**
+  2. Enable APIs under APIs & Services → Library — enable all that apply to your project type:
+     - **All types:** reCAPTCHA Enterprise API
+     - **Web/SaaS (Google Sign-In):** Google Identity API
+     - **iOS/Android:** Firebase services are enabled automatically when you add Firebase below
+     - **Android:** Google Play Android Developer API
+  3. Create a **service account** for the agent:
+     - IAM & Admin → Service Accounts → Create → name it `agent` (e.g. `agent@myapp-prod.iam.gserviceaccount.com`)
+     - Grant roles (add all that apply to your project type):
+       - **All types:** `reCAPTCHA Enterprise Admin`
+       - **iOS/Android:** `Firebase Admin` (`roles/firebase.admin`)
+       - **Android:** grant "Release Manager" in Google Play Console separately (see Android adds below)
+     - Keys → Add Key → JSON → download and save the JSON file securely
+  4. **Google Sign-In / OAuth (web/saas only):** set up OAuth credentials for "Sign in with Google":
+     - APIs & Services → OAuth consent screen → External → fill in app name, support email, developer email → Save
+     - APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID → Web application
+     - Add authorised redirect URIs (e.g. `https://www.myapp.com/auth/google/callback`)
+     - Note the **Client ID** (public) and **Client Secret** (private)
+  5. **Firebase (iOS/Android only):** go to console.firebase.google.com → Add project → select the GCP project you just created (do NOT create a new Firebase project — link to the existing one). Add iOS/Android app, download config files.
+
 - [ ] **Discord** — Create the channel in the server. Enable Developer Mode (User Settings → Advanced), right-click the channel → Copy Channel ID.
 
 ---
 
-### Web app adds
-
-- [ ] **Google Cloud** — Create a dedicated GCP project for this app (one project per app keeps billing, quotas, and credentials isolated):
-  - console.cloud.google.com → New Project → name it after the app (e.g. `myapp-prod`)
-  - Note the **Project ID** (used in API calls)
-  - Enable **reCAPTCHA Enterprise API** under APIs & Services → Library (agents use this — free tier is 1M assessments/month)
-  - Create a **service account** for the agent:
-    - IAM & Admin → Service Accounts → Create → name it `agent` (e.g. `agent@myapp-prod.iam.gserviceaccount.com`)
-    - Grant roles: `reCAPTCHA Enterprise Admin` (add more roles here as needed for other Google APIs)
-    - Keys → Add Key → JSON → download the JSON file → save it somewhere safe on your machine
-  - The agent will use this service account to create reCAPTCHA keys, store secrets, and set GitHub secrets automatically — you do not need to create reCAPTCHA keys manually
+### Web / SaaS adds
 
 - [ ] **Cloudflare** — Add the domain to Cloudflare. Create an API token:
   - My Profile → API Tokens → Create Token → Custom token
   - Permissions: Zone / Zone / Read + Zone / DNS / Edit + (if using Pages/Workers) Account / Cloudflare Pages / Edit
   - Scope: your specific zone
-  - Save the token, **Account ID** (right sidebar of the Cloudflare dashboard), and **Zone ID** (right sidebar when viewing the domain — needed for DNS automation and cache purging)
+  - Save the token, **Account ID** (right sidebar of the Cloudflare dashboard), and **Zone ID** (right sidebar when viewing the domain)
 
 - [ ] **Email sending** — Choose one: Sendgrid, Resend, or Postmark.
   - Create account, verify sending domain, generate API key
@@ -72,23 +83,20 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
 
 ---
 
-### iOS adds (in addition to web app)
+### iOS adds
 
 - [ ] **Apple Developer** — Create App ID at developer.apple.com (Certificates → Identifiers)
 - [ ] **App Store Connect API key** — Users and Access → Integrations → App Store Connect API → Generate key. Download the `.p8` file (can only be downloaded once). Note the Issuer ID and Key ID.
-- [ ] **Firebase** — Create project at console.firebase.google.com. Add iOS app with the bundle ID. Download `GoogleService-Info.plist`.
+- [ ] **Firebase config file** — from the Firebase project created above: download `GoogleService-Info.plist` for the iOS app
 
 ---
 
-### Android adds (in addition to web app)
+### Android adds
 
-- [ ] **Google Play Console** — Create the app. Then:
-  - Setup → API access → Link to a Google Cloud project
-  - Create service account → Grant "Release Manager" role
-  - Download the JSON key file
-
-- [ ] **Firebase** — Create project (or reuse iOS one). Add Android app. Download `google-services.json`.
-
+- [ ] **Google Play Console** — Create the app. Then link it to your GCP project:
+  - Setup → API access → Link to existing Google Cloud project → select the GCP project you created above
+  - Grant the `agent` service account "Release Manager" role in Play Console (IAM → Service accounts → find `agent@...` → grant role)
+- [ ] **Firebase config file** — from the Firebase project created above: download `google-services.json` for the Android app
 - [ ] **Signing keystore** — Generate on the host machine:
   ```bash
   keytool -genkey -v -keystore myapp.jks -alias myapp -keyalg RSA -keysize 2048 -validity 10000
@@ -97,7 +105,7 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
 
 ---
 
-### SaaS adds (in addition to web app)
+### SaaS adds (in addition to web)
 
 - [ ] **Stripe** — Create account at stripe.com. Developers → API keys → copy secret key. Set up webhook endpoint and copy webhook secret.
 - [ ] **Sentry** — Create project at sentry.io. Settings → Projects → Client Keys → copy DSN. Settings → Auth Tokens → create token for the agent.
@@ -126,22 +134,27 @@ Ask for all of the following (can ask in one message):
 9. **AWS secret access key** — from prerequisites
 10. **AWS region** — default region (e.g. `ap-southeast-2`)
 
+**Universal adds (all types):**
+11. **Google Cloud project ID** — from prerequisites
+12. **GCP service account JSON path** — path on host machine to the downloaded JSON key file
+
 **Web / SaaS adds:**
-11. **Cloudflare API token** — from prerequisites
-12. **Cloudflare account ID** — from prerequisites (dashboard right sidebar)
-13. **Cloudflare zone ID** — from prerequisites (domain right sidebar)
-14. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
-15. **Google Cloud project ID** — from prerequisites
-16. **GCP service account JSON path** — path on host machine to the downloaded JSON key file
+13. **Cloudflare API token** — from prerequisites
+14. **Cloudflare account ID** — from prerequisites (dashboard right sidebar)
+15. **Cloudflare zone ID** — from prerequisites (domain right sidebar)
+16. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
+17. **Google OAuth client ID** — from prerequisites (if using Google Sign-In)
+18. **Google OAuth client secret** — from prerequisites (if using Google Sign-In)
 
 **iOS adds:**
 13. **App Store Connect Issuer ID**
 14. **App Store Connect Key ID**
 15. **App Store Connect p8 file path** — path on host machine to the `.p8` file
+16. **Firebase config file path** — path to `GoogleService-Info.plist`
 
 **Android adds:**
-13. **Google Play service account JSON path** — path on host machine
-14. **Keystore path + alias + passwords**
+13. **Keystore path + alias + passwords**
+14. **Firebase config file path** — path to `google-services.json`
 
 **SaaS adds:**
 13. **Stripe secret key**
@@ -435,10 +448,12 @@ This file is the source of truth for all technical constraints. All agents must 
 ## Google Services
 
 - **One dedicated GCP project per app** — credentials and quotas are isolated per project.
-- **reCAPTCHA Enterprise** (score-based, equivalent to v3) for bot protection on login/signup. Score threshold: 0.5. Free tier: 1M assessments/month.
-- **Server-side verification** uses the GCP service account JSON stored in AWS Secrets Manager (`us-east-1`). Lambda fetches and caches it at cold start via `RECAPTCHA_SECRET_ARN`. Use the `@google-cloud/recaptcha-enterprise` SDK — not the simple REST endpoint used for legacy v3.
-- **reCAPTCHA site key** injected at deploy time via GitHub Actions secret `RECAPTCHA_SITE_KEY` — never committed.
-- Additional Google APIs (Maps, etc.) use the same GCP project and service account — enable per-API under APIs & Services and grant the required role to the service account.
+- **Two credential types from GCP:**
+  - **Service account JSON** — used by the agent and backend Lambda for server-side Google API calls (reCAPTCHA, Firebase Admin, Play API). Stored in AWS Secrets Manager. Never committed.
+  - **OAuth 2.0 client** — used for "Sign in with Google". Client ID is public (injected at deploy time). Client Secret is stored in AWS Secrets Manager. Never committed.
+- **reCAPTCHA Enterprise** (score-based, equivalent to v3) for bot protection on login/signup. Score threshold: 0.5. Free tier: 1M assessments/month. Server-side verification uses the service account via `@google-cloud/recaptcha-enterprise` SDK.
+- **Google Sign-In**: OAuth 2.0 authorization code flow. Backend exchanges the auth code for tokens using the OAuth client secret. Cognito can be configured as the identity broker (federation) or the backend can handle token exchange directly.
+- Additional Google APIs (Maps, etc.) use the same GCP project — enable per-API and grant the required role to the `agent` service account.
 
 ## API Design
 
@@ -736,30 +751,33 @@ GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
 AWS_ACCESS_KEY_ID_{FOLDER_UPPER}=<aws-key-id>
 AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}=<aws-secret>
 AWS_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
+GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}=<gcp-project-id>
+GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-service-account-json>
 ```
 
 Add extra lines for the project type's additional credentials (omit lines that don't apply):
 
 ```
-# Web
+# Web / SaaS
 CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
 CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
 CLOUDFLARE_ZONE_ID_{FOLDER_UPPER}=<zone-id>
 EMAIL_API_KEY_{FOLDER_UPPER}=<key>
-GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}=<gcp-project-id>
-GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-service-account-json>
+GOOGLE_OAUTH_CLIENT_ID_{FOLDER_UPPER}=<oauth-client-id>       # if using Google Sign-In
+GOOGLE_OAUTH_CLIENT_SECRET_{FOLDER_UPPER}=<oauth-client-secret> # if using Google Sign-In
 
 # iOS
 APP_STORE_CONNECT_ISSUER_ID_{FOLDER_UPPER}=<id>
 APP_STORE_CONNECT_KEY_ID_{FOLDER_UPPER}=<key-id>
 APP_STORE_CONNECT_P8_PATH_{FOLDER_UPPER}=<host-path-to-p8>
+FIREBASE_CONFIG_IOS_{FOLDER_UPPER}=<host-path-to-GoogleService-Info.plist>
 
 # Android
-GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-json>
 ANDROID_KEYSTORE_PATH_{FOLDER_UPPER}=<host-path-to-jks>
 ANDROID_KEY_ALIAS_{FOLDER_UPPER}=<alias>
 ANDROID_KEY_PASSWORD_{FOLDER_UPPER}=<password>
 ANDROID_STORE_PASSWORD_{FOLDER_UPPER}=<password>
+FIREBASE_CONFIG_ANDROID_{FOLDER_UPPER}=<host-path-to-google-services.json>
 
 # SaaS
 STRIPE_SECRET_KEY_{FOLDER_UPPER}=<key>
@@ -778,20 +796,23 @@ Use `gh secret set --repo {REPO}` for every credential. The `--repo` flag is req
 
 **Universal (all project types):**
 ```bash
-GH_TOKEN=<github-pat> gh secret set AWS_ACCESS_KEY_ID     --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set AWS_SECRET_ACCESS_KEY --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION    --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set AWS_ACCESS_KEY_ID           --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set AWS_SECRET_ACCESS_KEY       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION          --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID     --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_SERVICE_ACCOUNT_JSON --repo {REPO} --body "$(cat <path-to-service-account-json>)"
+# RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_ARN are set automatically by Step 2c
 ```
 
 **Web / SaaS adds:**
 ```bash
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN          --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID         --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID            --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY                 --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID       --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set GOOGLE_SERVICE_ACCOUNT_JSON   --repo {REPO} --body "$(cat <path-to-service-account-json>)"
-# RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_ARN are set automatically by Step 2c below
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN        --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID          --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY               --repo {REPO} --body "<value>"
+# If using Google Sign-In:
+GH_TOKEN=<github-pat> gh secret set GOOGLE_OAUTH_CLIENT_ID      --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_OAUTH_CLIENT_SECRET  --repo {REPO} --body "<value>"
 ```
 
 **iOS adds:**
