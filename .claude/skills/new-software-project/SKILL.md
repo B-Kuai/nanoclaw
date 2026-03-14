@@ -53,9 +53,12 @@ Then show the relevant checklist and ask them to confirm everything is ready bef
 - [ ] **Google Cloud** — Create a dedicated GCP project for this app (one project per app keeps billing, quotas, and credentials isolated):
   - console.cloud.google.com → New Project → name it after the app (e.g. `myapp-prod`)
   - Note the **Project ID** (used in API calls)
-  - Enable the APIs you need (reCAPTCHA Enterprise, Maps, Gmail API, etc.) under APIs & Services → Library
-  - For **reCAPTCHA v3**: go to google.com/recaptcha/admin → create site → reCAPTCHA v3 → add your domain → copy **Site key** (public) and **Secret key** (private)
-  - Store the secret key in AWS Secrets Manager (`us-east-1`) and note the ARN
+  - Enable **reCAPTCHA Enterprise API** under APIs & Services → Library (agents use this — free tier is 1M assessments/month)
+  - Create a **service account** for the agent:
+    - IAM & Admin → Service Accounts → Create → name it `agent` (e.g. `agent@myapp-prod.iam.gserviceaccount.com`)
+    - Grant roles: `reCAPTCHA Enterprise Admin` (add more roles here as needed for other Google APIs)
+    - Keys → Add Key → JSON → download the JSON file → save it somewhere safe on your machine
+  - The agent will use this service account to create reCAPTCHA keys, store secrets, and set GitHub secrets automatically — you do not need to create reCAPTCHA keys manually
 
 - [ ] **Cloudflare** — Add the domain to Cloudflare. Create an API token:
   - My Profile → API Tokens → Create Token → Custom token
@@ -129,8 +132,7 @@ Ask for all of the following (can ask in one message):
 13. **Cloudflare zone ID** — from prerequisites (domain right sidebar)
 14. **Email API key** — Sendgrid / Resend / Postmark key from prerequisites
 15. **Google Cloud project ID** — from prerequisites
-16. **reCAPTCHA site key** — public key from Google reCAPTCHA admin (if using reCAPTCHA)
-17. **reCAPTCHA secret ARN** — AWS Secrets Manager ARN of the reCAPTCHA secret key (if using reCAPTCHA)
+16. **GCP service account JSON path** — path on host machine to the downloaded JSON key file
 
 **iOS adds:**
 13. **App Store Connect Issuer ID**
@@ -433,10 +435,10 @@ This file is the source of truth for all technical constraints. All agents must 
 ## Google Services
 
 - **One dedicated GCP project per app** — credentials and quotas are isolated per project.
-- **reCAPTCHA v3** (invisible, score-based) for bot protection on login/signup. Score threshold: 0.5.
-- **reCAPTCHA secret key** stored in AWS Secrets Manager (`us-east-1`), fetched at Lambda cold start. Never in source or environment variables.
-- **reCAPTCHA site key** and API base URL injected at deploy time via GitHub Actions secrets — never committed.
-- Additional Google APIs (Maps, etc.) use the same GCP project — enable per-API under APIs & Services.
+- **reCAPTCHA Enterprise** (score-based, equivalent to v3) for bot protection on login/signup. Score threshold: 0.5. Free tier: 1M assessments/month.
+- **Server-side verification** uses the GCP service account JSON stored in AWS Secrets Manager (`us-east-1`). Lambda fetches and caches it at cold start via `RECAPTCHA_SECRET_ARN`. Use the `@google-cloud/recaptcha-enterprise` SDK — not the simple REST endpoint used for legacy v3.
+- **reCAPTCHA site key** injected at deploy time via GitHub Actions secret `RECAPTCHA_SITE_KEY` — never committed.
+- Additional Google APIs (Maps, etc.) use the same GCP project and service account — enable per-API under APIs & Services and grant the required role to the service account.
 
 ## API Design
 
@@ -641,6 +643,63 @@ This file is the source of truth for all technical constraints. All agents must 
 
 ---
 
+## Step 2c — Bootstrap Google services (web/saas only)
+
+Skip this step for iOS, Android, and library projects.
+
+Using the GCP service account JSON from tools.env, bootstrap reCAPTCHA Enterprise and store the credentials automatically. The service account JSON path is in `$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}`.
+
+```bash
+SA_JSON="$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}"
+PROJECT_ID="$GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}"
+DOMAIN="{production-domain}"  # e.g. www.myapp.com
+
+# Authenticate with the service account
+gcloud auth activate-service-account --key-file="$SA_JSON"
+gcloud config set project "$PROJECT_ID"
+
+# Create reCAPTCHA Enterprise key (web, score-based / v3-equivalent)
+RECAPTCHA_RESPONSE=$(curl -s -X POST \
+  "https://recaptchaenterprise.googleapis.com/v1/projects/${PROJECT_ID}/keys" \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"displayName\": \"{PROJECT}\",
+    \"webSettings\": {
+      \"allowedDomains\": [\"$DOMAIN\", \"localhost\"],
+      \"integrationType\": \"SCORE\"
+    }
+  }")
+
+SITE_KEY=$(echo "$RECAPTCHA_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'].split('/')[-1])")
+echo "reCAPTCHA site key: $SITE_KEY"
+
+# Store the service account JSON itself in AWS Secrets Manager as the reCAPTCHA "secret"
+# (For reCAPTCHA Enterprise, server-side verification uses the service account, not a secret key)
+SECRET_ARN=$(AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_{FOLDER_UPPER} \
+  AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER} \
+  AWS_DEFAULT_REGION=us-east-1 \
+  aws secretsmanager create-secret \
+    --name "{PROJECT}/recaptcha-service-account" \
+    --description "GCP service account for reCAPTCHA Enterprise verification" \
+    --secret-string "$(cat $SA_JSON)" \
+    --query ARN --output text)
+echo "Secret ARN: $SECRET_ARN"
+
+# Push to GitHub secrets
+GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SITE_KEY   --repo {REPO} --body "$SITE_KEY"
+GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SECRET_ARN --repo {REPO} --body "$SECRET_ARN"
+```
+
+Confirm to the user:
+- reCAPTCHA Enterprise key created in project `{PROJECT}`
+- Secret stored in AWS Secrets Manager (`us-east-1`)
+- `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_ARN` set as GitHub secrets on `{REPO}`
+
+> **Note:** reCAPTCHA Enterprise server-side verification works differently from v3 — the Lambda verifies tokens using the GCP service account (via the secret ARN above) instead of a plain secret key. The engineer must use the `@google-cloud/recaptcha-enterprise` SDK, not the simple REST endpoint used for v3.
+
+---
+
 ## Step 3 — Create Trello board and update tools.env
 
 ### 3a — Create Trello board
@@ -688,8 +747,7 @@ CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
 CLOUDFLARE_ZONE_ID_{FOLDER_UPPER}=<zone-id>
 EMAIL_API_KEY_{FOLDER_UPPER}=<key>
 GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}=<gcp-project-id>
-RECAPTCHA_SITE_KEY_{FOLDER_UPPER}=<site-key>          # omit if not using reCAPTCHA
-RECAPTCHA_SECRET_ARN_{FOLDER_UPPER}=<secrets-manager-arn>  # omit if not using reCAPTCHA
+GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-service-account-json>
 
 # iOS
 APP_STORE_CONNECT_ISSUER_ID_{FOLDER_UPPER}=<id>
@@ -727,14 +785,13 @@ GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION    --repo {REPO} --body "
 
 **Web / SaaS adds:**
 ```bash
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN       --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID      --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID         --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY              --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID    --repo {REPO} --body "<value>"
-# Only if using reCAPTCHA:
-GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SITE_KEY         --repo {REPO} --body "<value>"
-GH_TOKEN=<github-pat> gh secret set RECAPTCHA_SECRET_ARN       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_API_TOKEN          --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ACCOUNT_ID         --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set CLOUDFLARE_ZONE_ID            --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set EMAIL_API_KEY                 --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID       --repo {REPO} --body "<value>"
+GH_TOKEN=<github-pat> gh secret set GOOGLE_SERVICE_ACCOUNT_JSON   --repo {REPO} --body "$(cat <path-to-service-account-json>)"
+# RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_ARN are set automatically by Step 2c below
 ```
 
 **iOS adds:**
