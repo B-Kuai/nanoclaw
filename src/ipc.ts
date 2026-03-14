@@ -23,6 +23,7 @@ export interface IpcDeps {
     availableGroups: AvailableGroup[],
     registeredJids: Set<string>,
   ) => void;
+  requeueGroup?: (folderName: string) => void;
 }
 
 let ipcWatcherRunning = false;
@@ -90,6 +91,16 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   logger.warn(
                     { chatJid: data.chatJid, sourceGroup },
                     'Unauthorized IPC message attempt blocked',
+                  );
+                }
+              } else if (data.type === 'requeue') {
+                if (deps.requeueGroup) {
+                  deps.requeueGroup(sourceGroup);
+                  logger.info({ sourceGroup }, 'IPC requeue triggered');
+                } else {
+                  logger.warn(
+                    { sourceGroup },
+                    'requeue IPC received but requeueGroup not configured',
                   );
                 }
               } else if (data.type === 'send_file' && data.filePath) {

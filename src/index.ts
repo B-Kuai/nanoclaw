@@ -604,6 +604,29 @@ async function main(): Promise<void> {
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>
       writeGroupsSnapshot(gf, im, ag, rj),
+    requeueGroup: (folderName: string) => {
+      const chatJid = Object.keys(registeredGroups).find(
+        (jid) => registeredGroups[jid].folder === folderName,
+      );
+      if (!chatJid) {
+        logger.warn({ folderName }, 'requeue: no registered group for folder');
+        return;
+      }
+      // Inject a synthetic "continue" message so processGroupMessages has something to process
+      const ts = new Date().toISOString();
+      storeMessage({
+        id: `auto-continue-${Date.now()}`,
+        chat_jid: chatJid,
+        sender: 'system',
+        sender_name: 'System',
+        content: 'continue',
+        timestamp: ts,
+        is_from_me: false,
+        is_bot_message: false,
+      });
+      queue.enqueueMessageCheck(chatJid);
+      logger.info({ folderName, chatJid }, 'Group requeued via IPC');
+    },
   });
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();

@@ -265,8 +265,9 @@ Full workflow: User → PM → Tech Lead → QA (advisory plan) → Engineer →
 
 ## Decision Loop
 
-Run this loop **continuously and autonomously** until all cards reach Done or a blocker occurs.
-Stop when waiting for user clarification — resume when user replies.
+Each invocation handles **one step** of the pipeline, then hands control back to nanoclaw.
+Do not loop — check state, invoke one agent, write the requeue IPC, then exit.
+When waiting for user input (clarification, all done, blocked), exit without requeueing.
 
 Use `mcp__nanoclaw__send_message` to post progress updates to the user while working:
 - **When a new user request arrives:** acknowledge immediately before doing anything else — "Got it! Working on: [one-line summary]"
@@ -304,9 +305,9 @@ LOOP:
        ls {WORKSPACE}/tests/e2e/*.spec.js 2>/dev/null || echo "none"
 
   5. Route to next agent:
-       CLARIFICATION.md exists                              → STOP: send questions to user, wait for answers (see Clarification Flow below)
-       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = PASS → move card to Done, continue loop
-       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = FAIL → move card to In Progress, report failure to user
+       CLARIFICATION.md exists                              → STOP (exit without requeue): send questions to user, wait for answers
+       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = PASS → move card to Done, then REQUEUE
+       Cards in "Smoke Test"  + SMOKE_TEST_RESULT.md = FAIL → STOP (exit without requeue): move card to In Progress, report failure to user
        Cards in "Smoke Test"  + no SMOKE_TEST_RESULT.md    → invoke Engineer (step 16: run browser smoke test on live URL)
        Cards in "Deploying"                                 → invoke Engineer (step 16: watch deploy in progress)
        Cards in "Review"      + no e2e spec for this card  → invoke QA (Phase B, write e2e tests)
@@ -316,10 +317,10 @@ LOOP:
        PR_STATE.md STEP=waiting-ci                         → invoke Engineer (step 10: resume CI watch for PR in PR_STATE.md)
        Cards in "In Progress" + REVIEW_FEEDBACK.md         → invoke Engineer (rework)
        Cards in "In Progress" + no feedback + WIP commits on branch → invoke Engineer (resume interrupted work — pass PR_STATE.md contents if it exists)
-       Cards in "In Progress" + no feedback + no branch    → STOP: report status, something is stuck
+       Cards in "In Progress" + no feedback + no branch    → STOP (exit without requeue): report status, something is stuck
        Cards in "Backlog"                                   → invoke Tech Lead
        No cards yet                                         → invoke PM (first time, or user added new requirements)
-       No active cards + all cards in Done                  → STOP: all done, send final summary with live URL
+       No active cards + all cards in Done                  → STOP (exit without requeue): all done, send final summary with live URL
 
    To check if an e2e spec exists for a card: look for a .spec.js file in tests/e2e/ whose
    name relates to the card's feature (not card ID). If uncertain, invoke QA Phase B anyway —
@@ -332,7 +333,9 @@ LOOP:
    ```
 
   6. Invoke the agent, wait for it to complete
-  7. Go to step 1
+  7. Write the requeue IPC to trigger the next step in a fresh container:
+       echo '{"type":"requeue"}' > /workspace/ipc/messages/requeue-$(date +%s%N).json
+     Then exit. nanoclaw will start a new container for the next step automatically.
 ```
 
 ## Clarification Flow
