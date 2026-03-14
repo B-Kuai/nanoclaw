@@ -396,7 +396,12 @@ This file is the source of truth for all technical constraints. All agents must 
 
 - **Cloud provider:** AWS only. No GCP, Azure, or multi-cloud.
 - **IaC:** AWS CDK (TypeScript). No CloudFormation YAML, Terraform, or SAM.
-- **Region:** `ap-southeast-2` (Sydney) for all resources.
+- **Primary region:** `ap-southeast-2` (Sydney) for all application resources (Lambda, DynamoDB, S3, API Gateway, ECS, etc.).
+- **Global/US-East-1 exceptions — these must always use `us-east-1`:**
+  - **ACM certificates** used by CloudFront (CloudFront requires certs in us-east-1, no exceptions)
+  - **Cognito User Pool** (us-east-1 has the broadest feature support and is the standard default)
+  - **SES** (us-east-1 has the highest sending limits and best deliverability)
+  - **Route 53** is global — no region applies
 - **CI/CD:** GitHub Actions only.
 
 ## Runtime & Language
@@ -491,7 +496,7 @@ This file is the source of truth for all technical constraints. All agents must 
 
 - **Cloud provider:** AWS only.
 - **IaC:** AWS CDK (TypeScript). CI/CD via GitHub Actions.
-- **Region:** `ap-southeast-2` for all backend resources.
+- **Primary region:** `ap-southeast-2` for all application resources. Cognito, ACM (CloudFront certs), and SES must use `us-east-1`.
 
 ## Distribution
 
@@ -548,7 +553,7 @@ This file is the source of truth for all technical constraints. All agents must 
 
 - **Cloud provider:** AWS only.
 - **IaC:** AWS CDK (TypeScript). CI/CD via GitHub Actions.
-- **Region:** `ap-southeast-2` for all backend resources.
+- **Primary region:** `ap-southeast-2` for all application resources. Cognito, ACM (CloudFront certs), and SES must use `us-east-1`.
 
 ## Distribution
 
