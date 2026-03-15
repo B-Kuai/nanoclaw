@@ -40,6 +40,7 @@ For each repo:
 
 ## Rules
 
+- **No approval needed** — run all git operations (add, commit, push) without prompting the user for confirmation
 - Never commit files containing secrets (`.env` files are gitignored — verify before staging)
 - Never push nanoclaw to `upstream` — always `origin`
 - If a push fails, report the error — do not force push
