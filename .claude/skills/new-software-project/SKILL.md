@@ -224,18 +224,32 @@ bash {WORKSPACE}/scripts/get-deploy-url.sh
 
 Git identity: name={GIT_NAME}, email={GIT_EMAIL}.
 
-## AWS
+## Infrastructure Management
 
-Local dev routes to LocalStack via `AWS_ENDPOINT_URL=http://host.docker.internal:4566` (already set).
-Use `cdklocal` instead of `cdk`. Real credentials only exist in GitHub Actions secrets.
+You ({BOT_NAME}) are also the **infrastructure manager**. You have admin-level cloud credentials from `infra.env` and can create, check, and manage cloud resources directly when asked.
 
-Prefix all AWS/CDK commands with the scoped credentials:
+**Your infra credentials** (from `infra.env` — admin access):
 ```bash
-AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_{FOLDER_UPPER} \
-AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER} \
-AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION_{FOLDER_UPPER} \
-cdklocal deploy
+# AWS admin
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_{FOLDER_UPPER}
+AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}
+AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION_{FOLDER_UPPER}
+
+# GCP (when configured)
+# GOOGLE_CLOUD_PROJECT_ID=$GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}
+# GOOGLE_SERVICE_ACCOUNT_JSON=$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}
+
+# Cloudflare (when configured)
+# CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}
 ```
+
+Use these directly for infra tasks the user asks for (checking AWS resources, creating GCP projects, managing DNS, etc.).
+
+**Sub-agent credentials** (from `agents.env` — project-scoped, limited access):
+Sub-agents only get read-only / LocalStack AWS credentials, GitHub repo PAT, and Trello tokens. They should NEVER use the admin infra credentials.
+
+LocalStack endpoint: `AWS_ENDPOINT_URL=http://host.docker.internal:4566` (already set).
+Sub-agents use `cdklocal` instead of `cdk`. Real AWS credentials live only in GitHub Actions secrets.
 
 ---
 
@@ -251,14 +265,20 @@ This channel runs the **software-a-team** for the **{PROJECT}** project.
 | GitHub repo | `{REPO}` |
 | Workspace | `{WORKSPACE}` |
 | Architecture constraints | `{WORKSPACE}/ARCHITECTURE_DECISIONS.md` |
+| Product decisions | `{WORKSPACE}/PRODUCT_DECISIONS.md` |
+| UX design guidelines | `{WORKSPACE}/UX_DESIGN_GUIDELINES.md` |
+| Engineering lessons | `{WORKSPACE}/ENGINEERING_LESSONS.md` |
+| QA lessons | `{WORKSPACE}/QA_LESSONS.md` |
 
 ## Team Agents
 
 Agent role files live at `/workspace/global/software-a-team/agents/`. When invoking a sub-agent, always start the prompt with:
 > "Read `/workspace/global/software-a-team/agents/<role>.md` and follow those instructions.
 > Read `{WORKSPACE}/ARCHITECTURE_DECISIONS.md` — all architectural choices must comply with it.
+> Read `{WORKSPACE}/PRODUCT_DECISIONS.md` and `{WORKSPACE}/UX_DESIGN_GUIDELINES.md` for product and UX context.
+> Read `{WORKSPACE}/ENGINEERING_LESSONS.md` and `{WORKSPACE}/QA_LESSONS.md` to avoid repeating past mistakes.
 > Project config: REPO=`{REPO}`, WORKSPACE=`{WORKSPACE}`
-> Credentials: GH_TOKEN=`$GITHUB_TOKEN_{FOLDER_UPPER}`, AWS_ACCESS_KEY_ID=`$AWS_ACCESS_KEY_ID_{FOLDER_UPPER}`, AWS_SECRET_ACCESS_KEY=`$AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}`, AWS_DEFAULT_REGION=`$AWS_DEFAULT_REGION_{FOLDER_UPPER}`, TRELLO_BOARD_ID=`$TRELLO_BOARD_ID_{FOLDER_UPPER}`. Prefix all `gh`/`git push` commands with `GH_TOKEN=<value>`, all AWS/CDK commands with the AWS vars, and all `trello.sh` calls with `TRELLO_BOARD_ID=<value>`."
+> Credentials (from agents.env — project-scoped only): GH_TOKEN=`$GITHUB_TOKEN_{FOLDER_UPPER}`, AWS_ACCESS_KEY_ID=`$AWS_RO_ACCESS_KEY_ID_{FOLDER_UPPER}`, AWS_SECRET_ACCESS_KEY=`$AWS_RO_SECRET_ACCESS_KEY_{FOLDER_UPPER}`, AWS_DEFAULT_REGION=`$AWS_RO_DEFAULT_REGION_{FOLDER_UPPER}`, TRELLO_BOARD_ID=`$TRELLO_BOARD_ID_{FOLDER_UPPER}`. Prefix all `gh`/`git push` commands with `GH_TOKEN=<value>`, all AWS/CDK commands with the AWS vars, and all `trello.sh` calls with `TRELLO_BOARD_ID=<value>`. Do NOT use the infra admin credentials — those are for the orchestrator only."
 
 Then provide the card ID, task title, and any relevant context (PR URL, feedback file contents, etc.).
 
@@ -280,8 +300,8 @@ A: <user's answer>
 
 | Agent | Role file | Responsibility |
 |-------|-----------|----------------|
-| Product Manager | `agents/pm.md` | Breaks user requirements into tasks, writes `TASKS.md`, creates Trello cards in Backlog |
-| Tech Lead | `agents/tech-lead.md` | Reads constraints, writes technical spec in `DESIGN.md`, gates the Engineer by moving card to Ready |
+| Product Manager | `agents/pm.md` | Owns product requirements AND UX design — breaks requirements into tasks with UX specs, writes `TASKS.md`, updates `PRODUCT_DECISIONS.md` and `UX_DESIGN_GUIDELINES.md`, creates Trello cards in Backlog. **Must ask clarifying questions before proceeding.** |
+| Tech Lead | `agents/tech-lead.md` | Reads constraints + lessons, writes technical spec in `DESIGN.md`, gates the Engineer by moving card to Ready. **Must ask clarifying questions before proceeding.** |
 | QA Engineer | `agents/qa.md` | Writes an advisory `QA_PLAN.md` and test stubs before coding — Engineer uses it as guidance, not a strict requirement |
 | Engineer | `agents/engineer.md` | Implements code per `DESIGN.md` and `QA_PLAN.md`, runs tests against LocalStack, opens a PR, moves card to Review — and watches the post-merge production deploy |
 | Senior Reviewer | `agents/reviewer.md` | Reviews PR for correctness, security, and cost — merges then hands back to Engineer to watch the deploy |
@@ -309,7 +329,7 @@ Use `mcp__nanoclaw__send_message` to post progress updates to the user while wor
 - **Every 10 minutes of continuous work:** "⏳ Still working — [one-line summary of current step]"
 
 ```
-LOOP:
+STEP:
   1. Check Trello state (run: TRELLO_BOARD_ID=$TRELLO_BOARD_ID_{FOLDER_UPPER} bash /workspace/project/tools/trello.sh cards)
   2. Check state files:
        cat {WORKSPACE}/CLARIFICATION.md 2>/dev/null
@@ -317,6 +337,7 @@ LOOP:
        cat {WORKSPACE}/REVIEW_FEEDBACK.md 2>/dev/null
        cat {WORKSPACE}/SMOKE_TEST_RESULT.md 2>/dev/null
        cat {WORKSPACE}/PR_STATE.md 2>/dev/null
+       ls {WORKSPACE}/PRODUCT_DECISIONS.md {WORKSPACE}/UX_DESIGN_GUIDELINES.md {WORKSPACE}/ENGINEERING_LESSONS.md {WORKSPACE}/QA_LESSONS.md 2>/dev/null
 
   3. Check GitHub for open and recently merged PRs — source of truth for PR state, independent of Trello:
        GH_TOKEN=$GITHUB_TOKEN_{FOLDER_UPPER} gh pr list --repo {REPO} \
@@ -658,7 +679,120 @@ This file is the source of truth for all technical constraints. All agents must 
 
 ---
 
-## Step 2c — Bootstrap Google services (web/saas only)
+## Step 2c — Create project-level decision and learning files
+
+Create the following 4 files in `groups/{folder}/{PROJECT}/`. These start as templates and are filled in by agents as the project evolves.
+
+### PRODUCT_DECISIONS.md
+
+```markdown
+# Product Decisions
+
+This file is the source of truth for all product-level decisions. The PM and Tech Lead must read it before proposing new features or changes.
+
+## Product Vision
+
+<!-- Define the product's purpose, target users, and core value proposition here -->
+
+## Feature Decisions
+
+<!-- Record product decisions as they are made. Format:
+
+## <Feature name> — <date>
+- **Decision:** <what was decided>
+- **Why:** <user need or business reason>
+- **What we chose NOT to do:** <alternatives considered and rejected>
+-->
+```
+
+### UX_DESIGN_GUIDELINES.md
+
+```markdown
+# UX Design Guidelines
+
+This file is the source of truth for user experience and interface design decisions. The PM must read it before proposing UI changes, and the Engineer must follow it during implementation.
+
+## Design Principles
+
+<!-- Define the core UX principles for this project here -->
+
+## Visual & Layout Standards
+
+<!-- Colors, typography, spacing, responsive breakpoints, etc. -->
+
+## Interaction Patterns
+
+<!-- Standard patterns for forms, navigation, modals, feedback messages, loading states, etc. -->
+
+## Accessibility Requirements
+
+- All interactive elements must be keyboard accessible
+- All images must have alt text
+- Form inputs must have associated labels
+- Color contrast must meet WCAG AA minimum (4.5:1 for normal text)
+
+## Page-Specific Decisions
+
+<!-- Record UX decisions per page/feature as they are made. Format:
+
+## <Page/Feature name> — <date>
+- **Decision:** <what was decided>
+- **Why:** <user feedback, usability concern, or design rationale>
+- **Alternatives rejected:** <what else was considered>
+-->
+```
+
+### ENGINEERING_LESSONS.md
+
+```markdown
+# Engineering Lessons Learned
+
+This file captures mistakes the Engineer has made and the lessons to avoid repeating them. The Engineer must read this before starting any task.
+
+## How to use this file
+
+- Before starting work: read all entries below
+- After a mistake is caught (by QA, Reviewer, or smoke test): add an entry here
+- Format: what went wrong, why it happened, and what to do instead
+
+## Lessons
+
+<!-- Add entries as mistakes occur. Format:
+
+### <Short title> — <date>
+**What happened:** <describe the mistake>
+**Root cause:** <why it happened>
+**Rule going forward:** <what to do instead>
+-->
+```
+
+### QA_LESSONS.md
+
+```markdown
+# QA Lessons Learned
+
+This file captures testing gaps, missed bugs, and QA process improvements. The QA Engineer must read this before writing any test plan or e2e tests.
+
+## How to use this file
+
+- Before writing a QA plan: read all entries below to avoid known blind spots
+- After a bug escapes to production or Review catches something QA missed: add an entry here
+- Format: what was missed, why, and how to catch it next time
+
+## Lessons
+
+<!-- Add entries as gaps are found. Format:
+
+### <Short title> — <date>
+**What was missed:** <describe the bug or gap>
+**Why it was missed:** <why the test plan or e2e tests didn't catch it>
+**Rule going forward:** <what to test for next time>
+-->
+```
+
+---
+
+## Step 2d — Bootstrap Google services (web/saas only)
 
 Skip this step for iOS, Android, and library projects.
 
@@ -804,7 +938,7 @@ FIREBASE_CONFIG_IOS_{FOLDER_UPPER}=<host-path-to-GoogleService-Info.plist>  # ag
 FIREBASE_CONFIG_ANDROID_{FOLDER_UPPER}=<host-path-to-google-services.json>  # agents need for building
 ```
 
-**Not in either env file** — these go directly to GitHub Actions secrets (set in Step 2c and Step 4):
+**Not in either env file** — these go directly to GitHub Actions secrets (set in Step 2d and Step 4):
 - `RECAPTCHA_SITE_KEY` — injected into HTML at deploy time via `__RECAPTCHA_SITE_KEY__` placeholder
 - `RECAPTCHA_SECRET_ARN` — used by Lambda at runtime, never needed locally
 - `SENTRY_DSN` / `SENTRY_AUTH_TOKEN` — configured in CI for source maps and in deployed app config
@@ -828,7 +962,7 @@ GH_TOKEN=<github-pat> gh secret set AWS_SECRET_ACCESS_KEY       --repo {REPO} --
 GH_TOKEN=<github-pat> gh secret set AWS_DEFAULT_REGION          --repo {REPO} --body "<value>"
 GH_TOKEN=<github-pat> gh secret set GOOGLE_CLOUD_PROJECT_ID     --repo {REPO} --body "<value>"
 GH_TOKEN=<github-pat> gh secret set GOOGLE_SERVICE_ACCOUNT_JSON --repo {REPO} --body "$(cat <path-to-service-account-json>)"
-# RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_ARN are set automatically by Step 2c
+# RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_ARN are set automatically by Step 2d
 ```
 
 **Web / SaaS adds:**
