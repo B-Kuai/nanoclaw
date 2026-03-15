@@ -772,35 +772,48 @@ GOOGLE_OAUTH_CLIENT_SECRET_{FOLDER_UPPER}=<oauth-client-secret> # if using Googl
 APP_STORE_CONNECT_ISSUER_ID_{FOLDER_UPPER}=<id>
 APP_STORE_CONNECT_KEY_ID_{FOLDER_UPPER}=<key-id>
 APP_STORE_CONNECT_P8_PATH_{FOLDER_UPPER}=<host-path-to-p8>
-FIREBASE_CONFIG_IOS_{FOLDER_UPPER}=<host-path-to-GoogleService-Info.plist>
 
 # Android
 ANDROID_KEYSTORE_PATH_{FOLDER_UPPER}=<host-path-to-jks>
 ANDROID_KEY_ALIAS_{FOLDER_UPPER}=<alias>
 ANDROID_KEY_PASSWORD_{FOLDER_UPPER}=<password>
 ANDROID_STORE_PASSWORD_{FOLDER_UPPER}=<password>
-FIREBASE_CONFIG_ANDROID_{FOLDER_UPPER}=<host-path-to-google-services.json>
 
 # SaaS
 STRIPE_SECRET_KEY_{FOLDER_UPPER}=<key>
 STRIPE_WEBHOOK_SECRET_{FOLDER_UPPER}=<secret>
-SENTRY_DSN_{FOLDER_UPPER}=<dsn>
-SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>
 ```
 
 **Append to `agents.env`** (project-scoped credentials for sub-agents):
 
 ```
 # {PROJECT} — sub-agent credentials
+TRELLO_API_KEY=<api-key>                                       # needed by trello.sh (shared across projects, set once)
+TRELLO_TOKEN=<token>                                           # needed by trello.sh (shared across projects, set once)
 TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id from 3a>
 GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
 AWS_RO_ACCESS_KEY_ID_{FOLDER_UPPER}=test
 AWS_RO_SECRET_ACCESS_KEY_{FOLDER_UPPER}=test
 AWS_RO_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
-EMAIL_API_KEY_{FOLDER_UPPER}=<key>
+AWS_ENDPOINT_URL=http://host.docker.internal:4566              # LocalStack endpoint (shared, not a secret)
 ```
 
-Note: Sub-agents get `AWS_RO_*` (read-only / LocalStack) credentials, not the admin `AWS_*` keys. For real AWS access, credentials live only in GitHub Actions secrets.
+Add agent-level extras for the project type (omit lines that don't apply):
+
+```
+# Web / SaaS
+EMAIL_API_KEY_{FOLDER_UPPER}=<key>
+SENTRY_DSN_{FOLDER_UPPER}=<dsn>                                # agents need for error reporting in code
+SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>                        # agents need for source map uploads
+
+# iOS
+FIREBASE_CONFIG_IOS_{FOLDER_UPPER}=<host-path-to-GoogleService-Info.plist>  # agents need for building
+
+# Android
+FIREBASE_CONFIG_ANDROID_{FOLDER_UPPER}=<host-path-to-google-services.json>  # agents need for building
+```
+
+Note: Sub-agents get `AWS_RO_*` (read-only / LocalStack) credentials, not the admin `AWS_*` keys. For real AWS access, credentials live only in GitHub Actions secrets. `TRELLO_API_KEY` and `TRELLO_TOKEN` are in `agents.env` because `trello.sh` requires them for all card operations — but the orchestrator is the only one that uses them to create new boards (via Step 3a). `TRELLO_BOARD_ID_*` scopes agents to a specific board.
 
 **Security:** Never print, echo, or log any credential values. When confirming to the user, show only the variable names and mask secret values to `****<last4>`. These credentials are per-project — rotating one does not affect others.
 
