@@ -778,10 +778,6 @@ ANDROID_KEYSTORE_PATH_{FOLDER_UPPER}=<host-path-to-jks>
 ANDROID_KEY_ALIAS_{FOLDER_UPPER}=<alias>
 ANDROID_KEY_PASSWORD_{FOLDER_UPPER}=<password>
 ANDROID_STORE_PASSWORD_{FOLDER_UPPER}=<password>
-
-# SaaS
-STRIPE_SECRET_KEY_{FOLDER_UPPER}=<key>
-STRIPE_WEBHOOK_SECRET_{FOLDER_UPPER}=<secret>
 ```
 
 **Append to `agents.env`** (project-scoped credentials for sub-agents):
@@ -801,17 +797,19 @@ AWS_ENDPOINT_URL=http://host.docker.internal:4566              # LocalStack endp
 Add agent-level extras for the project type (omit lines that don't apply):
 
 ```
-# Web / SaaS
-EMAIL_API_KEY_{FOLDER_UPPER}=<key>
-SENTRY_DSN_{FOLDER_UPPER}=<dsn>                                # agents need for error reporting in code
-SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>                        # agents need for source map uploads
-
 # iOS
 FIREBASE_CONFIG_IOS_{FOLDER_UPPER}=<host-path-to-GoogleService-Info.plist>  # agents need for building
 
 # Android
 FIREBASE_CONFIG_ANDROID_{FOLDER_UPPER}=<host-path-to-google-services.json>  # agents need for building
 ```
+
+**Not in either env file** — these go directly to GitHub Actions secrets (set in Step 2c and Step 4):
+- `RECAPTCHA_SITE_KEY` — injected into HTML at deploy time via `__RECAPTCHA_SITE_KEY__` placeholder
+- `RECAPTCHA_SECRET_ARN` — used by Lambda at runtime, never needed locally
+- `SENTRY_DSN` / `SENTRY_AUTH_TOKEN` — configured in CI for source maps and in deployed app config
+- `EMAIL_API_KEY` — used by deployed app, not by agents during development
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — used by deployed backend, not by agents
 
 Note: Sub-agents get `AWS_RO_*` (read-only / LocalStack) credentials, not the admin `AWS_*` keys. For real AWS access, credentials live only in GitHub Actions secrets. `TRELLO_API_KEY` and `TRELLO_TOKEN` are in `agents.env` because `trello.sh` requires them for all card operations — but the orchestrator is the only one that uses them to create new boards (via Step 3a). `TRELLO_BOARD_ID_*` scopes agents to a specific board.
 
