@@ -662,7 +662,7 @@ This file is the source of truth for all technical constraints. All agents must 
 
 Skip this step for iOS, Android, and library projects.
 
-Using the GCP service account JSON from tools.env, bootstrap reCAPTCHA Enterprise and store the credentials automatically. The service account JSON path is in `$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}`.
+Using the GCP service account JSON from `infra.env`, bootstrap reCAPTCHA Enterprise and store the credentials automatically. The service account JSON path is in `$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}`.
 
 ```bash
 SA_JSON="$GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}"
@@ -715,11 +715,11 @@ Confirm to the user:
 
 ---
 
-## Step 3 — Create Trello board and update tools.env
+## Step 3 — Create Trello board and update credential files
 
 ### 3a — Create Trello board
 
-Use the shared `TRELLO_API_KEY` and `TRELLO_TOKEN` from `tools.env` to create a new board and the standard lists:
+Use the shared `TRELLO_API_KEY` and `TRELLO_TOKEN` from `agents.env` to create a new board and the standard lists:
 
 ```bash
 # Create board (returns JSON with .id)
@@ -738,16 +738,19 @@ echo "Board created: $BOARD_ID"
 
 Do NOT print or log the API key or token values.
 
-### 3b — Write tools.env
+### 3b — Write credential files
 
-`tools.env` lives at `/home/ben/Projects/nanoclaw/groups/tools.env`. It is gitignored — never committed, even in the private groups repo.
+Credentials are split into two files in `/home/ben/Projects/nanoclaw/groups/`. Both are gitignored — never committed, even to the private groups repo.
 
-Append a block for the new project (create the file if it doesn't exist):
+| File | Who uses it | Access level |
+|------|------------|-------------|
+| `infra.env` | Orchestrator (Pangge) | Admin — create/manage cloud resources |
+| `agents.env` | Sub-agents (Engineer, QA, etc.) | Project-scoped — repo push, Trello, read-only cloud |
+
+**Append to `infra.env`** (admin credentials for the orchestrator):
 
 ```
-# {PROJECT}
-TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id from 3a>
-GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
+# {PROJECT} — infra admin
 AWS_ACCESS_KEY_ID_{FOLDER_UPPER}=<aws-key-id>
 AWS_SECRET_ACCESS_KEY_{FOLDER_UPPER}=<aws-secret>
 AWS_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
@@ -755,14 +758,13 @@ GOOGLE_CLOUD_PROJECT_ID_{FOLDER_UPPER}=<gcp-project-id>
 GOOGLE_SERVICE_ACCOUNT_JSON_{FOLDER_UPPER}=<host-path-to-service-account-json>
 ```
 
-Add extra lines for the project type's additional credentials (omit lines that don't apply):
+Add infra-level extras for the project type (omit lines that don't apply):
 
 ```
 # Web / SaaS
 CLOUDFLARE_API_TOKEN_{FOLDER_UPPER}=<token>
 CLOUDFLARE_ACCOUNT_ID_{FOLDER_UPPER}=<account-id>
 CLOUDFLARE_ZONE_ID_{FOLDER_UPPER}=<zone-id>
-EMAIL_API_KEY_{FOLDER_UPPER}=<key>
 GOOGLE_OAUTH_CLIENT_ID_{FOLDER_UPPER}=<oauth-client-id>       # if using Google Sign-In
 GOOGLE_OAUTH_CLIENT_SECRET_{FOLDER_UPPER}=<oauth-client-secret> # if using Google Sign-In
 
@@ -785,6 +787,20 @@ STRIPE_WEBHOOK_SECRET_{FOLDER_UPPER}=<secret>
 SENTRY_DSN_{FOLDER_UPPER}=<dsn>
 SENTRY_AUTH_TOKEN_{FOLDER_UPPER}=<token>
 ```
+
+**Append to `agents.env`** (project-scoped credentials for sub-agents):
+
+```
+# {PROJECT} — sub-agent credentials
+TRELLO_BOARD_ID_{FOLDER_UPPER}=<board-id from 3a>
+GITHUB_TOKEN_{FOLDER_UPPER}=<github-pat>
+AWS_RO_ACCESS_KEY_ID_{FOLDER_UPPER}=test
+AWS_RO_SECRET_ACCESS_KEY_{FOLDER_UPPER}=test
+AWS_RO_DEFAULT_REGION_{FOLDER_UPPER}=<aws-region>
+EMAIL_API_KEY_{FOLDER_UPPER}=<key>
+```
+
+Note: Sub-agents get `AWS_RO_*` (read-only / LocalStack) credentials, not the admin `AWS_*` keys. For real AWS access, credentials live only in GitHub Actions secrets.
 
 **Security:** Never print, echo, or log any credential values. When confirming to the user, show only the variable names and mask secret values to `****<last4>`. These credentials are per-project — rotating one does not affect others.
 
@@ -847,7 +863,7 @@ GH_TOKEN=<github-pat> gh secret set SENTRY_DSN              --repo {REPO} --body
   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, EMAIL_API_KEY
 ```
 
-Note: The GitHub PAT itself is not pushed as a secret — it's already in `tools.env` for agent use and the workflow can use the built-in `GITHUB_TOKEN` for same-repo operations.
+Note: The GitHub PAT itself is not pushed as a secret — it's already in `agents.env` for agent use and the workflow can use the built-in `GITHUB_TOKEN` for same-repo operations.
 
 ---
 
@@ -894,7 +910,7 @@ systemctl --user status nanoclaw --no-pager | head -5
 Tell the user:
 - Trello board created: Backlog → Ready → In Progress → Review → Deploying → Smoke Test → Done
 - Group folder created: `groups/{folder}/CLAUDE.md`
-- Credentials written to `tools.env` (values never shown)
+- Credentials written to `infra.env` and `agents.env` (values never shown)
 - GitHub repo secrets set on `{REPO}` (names listed, values never shown)
 - DB row inserted for channel `dc:<channelId>`
 - nanoclaw restarted and running

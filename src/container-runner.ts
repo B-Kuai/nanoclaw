@@ -237,12 +237,24 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
-  // Inject tool credentials (Trello, GitHub, etc.) from tools.env if present.
-  // Docker reads the file on the host and injects the vars — the file itself
-  // is never mounted into the container.
-  const toolsEnvFile = path.join(process.cwd(), 'groups', 'tools.env');
-  if (fs.existsSync(toolsEnvFile)) {
-    args.push('--env-file', toolsEnvFile);
+  // Inject credentials from env files. Docker reads them on the host and
+  // injects the vars — the files are never mounted into the container.
+  //
+  // infra.env  — admin credentials for the orchestrator (AWS, GCP, Cloudflare)
+  // agents.env — project-scoped credentials for sub-agents (GitHub, Trello, read-only cloud)
+  //
+  // Both files are injected so the orchestrator can access infra vars directly.
+  // Sub-agents only use what the orchestrator passes them via prompt.
+  // Falls back to legacy tools.env if the split files don't exist yet.
+  const infraEnvFile = path.join(process.cwd(), 'groups', 'infra.env');
+  const agentsEnvFile = path.join(process.cwd(), 'groups', 'agents.env');
+  const legacyToolsEnvFile = path.join(process.cwd(), 'groups', 'tools.env');
+
+  if (fs.existsSync(infraEnvFile) && fs.existsSync(agentsEnvFile)) {
+    args.push('--env-file', infraEnvFile);
+    args.push('--env-file', agentsEnvFile);
+  } else if (fs.existsSync(legacyToolsEnvFile)) {
+    args.push('--env-file', legacyToolsEnvFile);
   }
 
   // Shared memory for Playwright/Chromium (default 64m causes crashes on complex pages)
